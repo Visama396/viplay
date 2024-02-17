@@ -1,54 +1,57 @@
-import { useState, useRef, useEffect } from "react"
-import { usePlayerStore } from '@/store/playerStore'
-
-export const Pause = () => (
-  <svg role="img" height="16" width="16" aria-hidden="true" viewBox="0 0 16 16"><path d="M2.7 1a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7H2.7zm8 0a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7h-2.6z"></path></svg>
-)
-
-export const Play = () => (
-  <svg role="img" height="16" width="16" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288V1.713z"></path></svg>
-)
+import { usePlayerStore } from '../store/playerStore'
+import { Pause, Play } from '@/icons/PlayerIcons'
+import { PlayerCurrentSong } from '@/components/PlayerCurrentSong'
+import { PlayerMusicControl } from '@/components/PlayerMusicControl'
+import { VolumeControl } from '@/components/VolumeControl'
+import { useEffect, useRef } from "react"
 
 export function Player () {
-  const { isPlaying, setIsPlaying } = usePlayerStore(state => state)
-  const [currentSong, setCurrentSong] = useState(null)
+  const { currentMusic, isPlaying, setIsPlaying, volume } = usePlayerStore(state => state)
   const audioRef = useRef()
 
   useEffect(() => {
-    audioRef.current.src = `/music/1/01.mp3`
-  }, [])
+    isPlaying 
+      ? audioRef.current.play() 
+      : audioRef.current.pause()
+  }, [isPlaying])
+
+  useEffect(() => {
+    audioRef.current.volume = volume
+  }, [volume])
+
+  useEffect(() => {
+    const { song, playlist } = currentMusic 
+    if (song) {
+      audioRef.current.src = `/music/${playlist?.id}/0${song.id}.mp3`
+      audioRef.current.volume = volume
+      audioRef.current.play()
+    }
+  }, [currentMusic])
 
   const handleClick = () => {
-    if (isPlaying) {
-      audioRef.current.pause()
-    } else {
-      audioRef.current.play()
-      audioRef.current.volume = 0.1
-    }
-
     setIsPlaying(!isPlaying)
   }
 
   return (
-    <div className="flex flex-row justify-between w-full px-4 z-50">
-      <div>
-        CurrentSong...
+    <div className="flex flex-row justify-between w-full px-1 z-50">
+      <div className="w-[200px]">
+        <PlayerCurrentSong {...currentMusic.song} />
       </div>
 
       <div className="grid place-content-center gap-4 flex-1">
-        <div className="flex justify-center">
-          <button className="bg-white rounded-full p-2" onClick={handleClick}>
+        <div className="flex flex-col items-center justify-center">
+          <button className="bg-white text-black rounded-full p-2 hover:scale-110" onClick={handleClick}>
             {isPlaying ? <Pause /> : <Play />}
           </button>
+          <PlayerMusicControl audio={audioRef} />
+          <audio ref={audioRef} />
         </div>
-        Player...
       </div>
 
-      <div>
-        Volume...
+      <div className="grid place-content-center">
+        <VolumeControl />
       </div>
 
-      <audio ref={audioRef}></audio>
     </div>
   )
 }
