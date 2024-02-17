@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Slider } from '@/components/Slider'
 
-export const SongControl = ({ audio }) => {
+export const PlayerMusicControl = ({ audio }) => {
   const [currentTime, setCurrentTime] = useState(0)
 
   useEffect(() => {
