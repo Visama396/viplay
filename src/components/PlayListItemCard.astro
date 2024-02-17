@@ -1,6 +1,8 @@
 ---
 import { type Playlist } from "@/lib/data";
 
+import { CardPlayButton } from '@/components/CardPlayButton.jsx'
+
 interface Props {
   playlist: Playlist
 }
@@ -9,17 +11,24 @@ const { playlist } = Astro.props
 const { id, cover, title, artists, color } = playlist
 const artistsString = artists.join(", ")
 ---
-<a
-  href={`/playlist/${id}`}
-  class="playlist-item flex flex-col relative p-2 overflow-hidden gap-2 pb-6 rounded-md transition-all duration-300 bg-zinc-500/30 hover:bg-zinc-800 shadow-lg hover:shadow-xl w-44"
-  transition:name=`playlist ${id} box`
->
-  <picture class="aspect-square w-full h-auto flex-none">
-    <img src={cover} alt={`Cover of ${title} by ${artistsString}`} class="object-cover w-full h-full rounded-md" transition:name=`playlist ${id} image`>
-  </picture>
+<article class="group relative">
 
-  <div class="flex flex-auto flex-col">
-    <h4 class="text-white text-sm" transition:name=`playlist ${id} title`>{title}</h4>
-    <span class="text-gray-400 text-xs" transition:name=`playlist ${id} artists`>{artistsString}</span>
+  <div class=`absolute right-4 bottom-20 translate-y-4 transition-all duration-500 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 z-10`>
+    <CardPlayButton id={id} client:visible />
   </div>
-</a>
+
+  <a
+    href={`/playlist/${id}`}
+    class="playlist-item flex flex-col relative p-2 overflow-hidden gap-2 pb-6 rounded-md transition-all duration-300 bg-zinc-500/30 hover:bg-zinc-800 shadow-lg hover:shadow-xl w-44"
+    transition:name=`playlist ${id} box`
+  >
+    <picture class="aspect-square w-full h-auto flex-none">
+      <img src={cover} alt={`Cover of ${title} by ${artistsString}`} class="object-cover w-full h-full rounded-md" transition:name=`playlist ${id} image`>
+    </picture>
+  
+    <div class="flex flex-auto flex-col">
+      <h4 class="text-white text-sm" transition:name=`playlist ${id} title`>{title}</h4>
+      <span class="text-gray-400 text-xs" transition:name=`playlist ${id} artists`>{artistsString}</span>
+    </div>
+  </a>
+</article>
