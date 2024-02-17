@@ -1,7 +1,7 @@
-import { type Song } from "@/lib/data"
-import { Play, Pause } from "@/icons/PlayerIcons";
-import { usePlayerStore, type CurrentMusic } from "@/store/playerStore.ts";
-import { getPlayListInfoById } from "@/services/ApiService";
+import { type Song } from "../lib/data"
+import { Play, Pause } from "../icons/PlayerIcons";
+import { usePlayerStore, type CurrentMusic } from "../store/playerStore"
+import { getPlayListInfoById } from "../services/ApiService"
 
 interface Props {
   song: Song

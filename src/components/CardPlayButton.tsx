@@ -1,6 +1,6 @@
-import { usePlayerStore } from '@/store/playerStore'
-import { getPlayListInfoById } from "@/services/ApiService";
-import { Pause, Play } from "@/icons/PlayerIcons"
+import { usePlayerStore } from '../store/playerStore'
+import { getPlayListInfoById } from "../services/ApiService";
+import { Pause, Play } from "../icons/PlayerIcons"
 
 
 export function CardPlayButton({id, size = 'small'}) {

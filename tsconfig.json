@@ -1,7 +1,7 @@
 {
   "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
-    "baseUrl": "E:/viplay",
+    "baseUrl": ".",
     "paths": {
       "@/*": [
         "src/*"
@@ -14,6 +14,9 @@
       ],
       "@/lib": [
         "src/lib/*"
+      ],
+      "@/store": [
+        "src/store/*"
       ],
       "@/services": [
         "src/services/*"
