@@ -168,6 +168,10 @@ export function Player () {
     setIsPlaying(!isPlaying)
   }
 
+  const handleOnEnded = () => {
+    onNextSong()
+  }
+
   return (
     <div className="flex flex-row justify-between w-full px-1 z-50">
       <div className="w-[200px]">
@@ -192,7 +196,7 @@ export function Player () {
             </button>
           </div>
           <PlayerControl audio={audioRef} />
-          <audio ref={audioRef} />
+          <audio ref={audioRef} onEnded={handleOnEnded} />
         </div>
       </div>
 
