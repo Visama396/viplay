@@ -429,5 +429,77 @@ export const songs: Song[] = [
     "artists": ["Melendi"],
     "album": "Lágrimas desordenadas",
     "duration": "3:48"
+  },
+  {
+    "id": 1,
+    "albumId": 8,
+    "title": "99 Luftballons",
+    "image": "https://t2.genius.com/unsafe/378x378/https%3A%2F%2Fimages.genius.com%2Fd7ba8779026c9fb7b3232354a8c021e4.1000x1000x1.png",
+    "artists": ["Nena"],
+    "album": "Nena",
+    "duration": "3:54"
+  },
+  {
+    "id": 2,
+    "albumId": 8,
+    "title": "Traum",
+    "image": "https://t2.genius.com/unsafe/378x378/https%3A%2F%2Fimages.genius.com%2Fbb0af5c718744dc933c285d7dabf917d.1000x1000x1.jpg",
+    "artists": ["Cro"],
+    "album": "Melodie",
+    "duration": "3:07"
+  },
+  {
+    "id": 3,
+    "albumId": 8,
+    "title": "Amerika",
+    "image": "https://t2.genius.com/unsafe/378x378/https%3A%2F%2Fimages.genius.com%2F6560cc9c8bdbc1aafaa58446bbd730b7.603x603x1.jpg",
+    "artists": ["Rammstein"],
+    "album": "Amerika",
+    "duration": "4:18"
+  },
+  {
+    "id": 4,
+    "albumId": 8,
+    "title": "Finale 1150",
+    "image": "https://t2.genius.com/unsafe/378x378/https%3A%2F%2Fimages.genius.com%2F05a8b8096d3a63b19f0f45769cea50a3.1000x1000x1.jpg",
+    "artists": ["RAF Camora"],
+    "album": "ZENIT",
+    "duration": "2:56"
+  },
+  {
+    "id": 5,
+    "albumId": 8,
+    "title": "Glück",
+    "image": "https://i.scdn.co/image/ab67616d00001e02eae76af432b642ed8d31a474",
+    "artists": ["Berge"],
+    "album": "Vor uns die Sinnflut",
+    "duration": "4:15"
+  },
+  {
+    "id": 6,
+    "albumId": 8,
+    "title": "Federkleid",
+    "image": "https://t2.genius.com/unsafe/378x378/https%3A%2F%2Fimages.genius.com%2Fcf04bd6ab990ddb0970ae03683ff0ece.1000x899x1.jpg",
+    "artists": ["Faun"],
+    "album": "Midgard",
+    "duration": "4:17"
+  },
+  {
+    "id": 7,
+    "albumId": 8,
+    "title": "Sieben",
+    "image": "https://t2.genius.com/unsafe/378x378/https%3A%2F%2Fimages.genius.com%2Fe74e9cf6fd2cbb7dd3b1f89f60acbd8b.1000x1000x1.jpg",
+    "artists": ["Subway to Sally"],
+    "album": "Nord Nord Ost",
+    "duration": "3:23"
+  },
+  {
+    "id": 8,
+    "albumId": 8,
+    "title": "Was wollen wir trinken",
+    "image": "https://t2.genius.com/unsafe/378x378/https%3A%2F%2Fimages.genius.com%2Fd5074e8e65192f9027453f61286e2760.500x500x1.jpg",
+    "artists": ["dArtagnan"],
+    "album": "Verehrt und Verdammt",
+    "duration": "3:12"
   }
 ]
