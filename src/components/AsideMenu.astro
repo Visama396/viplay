@@ -6,7 +6,7 @@ import LibraryIcon from '../icons/Library.astro'
 import SideMenuItem from '../components/SideMenuItem.astro'
 import SideMenuCard from '../components/SideMenuCard.astro'
 
-import { playlists } from '../lib/data'
+import { playlists, favourites } from '../lib/data'
 ---
 
 <nav class="flex flex-col flex-1 gap-2">
@@ -33,6 +33,9 @@ import { playlists } from '../lib/data'
 
       {
         playlists.map(playlist => <SideMenuCard playlist={playlist} />)
+      }
+      {
+        favourites.map(favourite => <SideMenuCard playlist={favourite} />)
       }
     </ul>
   </div>

@@ -3,22 +3,31 @@ import Layout from '../layouts/Layout.astro'
 import PlayListItemCard from '../components/PlayListItemCard.astro'
 import Greeting from '../components/Greeting.svelte'
 
-import { playlists } from '../lib/data'
+import { playlists, favourites } from '@/lib/data'
+import { colors } from '@/lib/colors'
 ---
 
-<Layout title="Viplay. Listen to my favourite music.">
+<Layout title="Viplay. Listen to my favourite music." description="Music player with my favourite albums and songs">
 	<div
     id="playlist-container"
     class="relative transition-all duration-1000 bg-green-600"
   >
     <!-- <PageHeader /> -->
 
-
     <div class="relative z-10 px-6 pt-10">
       <Greeting />
       <div class="flex flex-wrap mt-6 gap-4">
         {
           playlists.map(playlist => <PlayListItemCard playlist={playlist} />)
+        }
+      </div>
+    </div>
+
+    <div class="relative z-10 px-6 pt-10">
+      <h1 class="text-3xl font-bold">My Favourites</h1>
+      <div class="flex flex-wrap mt-6 gap-4">
+        {
+          favourites.map(favourite => <PlayListItemCard playlist={favourite} />)
         }
       </div>
     </div>
