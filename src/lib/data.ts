@@ -431,6 +431,15 @@ export const songs: Song[] = [
     "duration": "3:48"
   },
   {
+    "id": 11,
+    "albumId": 7,
+    "title": "La Deriva",
+    "image": "https://t2.genius.com/unsafe/251x251/https%3A%2F%2Fimages.genius.com%2Fefc0cfabef8db7e0e4a3b8ef45d86671.1000x1000x1.jpg",
+    "artists": ["Vetusta Morla"],
+    "album": "La Deriva",
+    "duration": "3:39"
+  },
+  {
     "id": 1,
     "albumId": 8,
     "title": "99 Luftballons",
