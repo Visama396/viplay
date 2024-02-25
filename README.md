@@ -3,5 +3,4 @@
 It uses one component of ShadCN.
 The font used is Onest, from Fontsource.
 
-
-![viplay](https://github.com/Visama396/viplay/assets/35543599/79a283f8-bc05-47eb-9b3c-ae252f8ad373)
+![viplay](https://github.com/Visama396/viplay/assets/35543599/40e90a57-621c-4f06-80df-422cb4b37d08)
