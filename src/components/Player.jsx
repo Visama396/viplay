@@ -1,5 +1,5 @@
 import { usePlayerStore } from '../store/playerStore'
-import { Pause, Play, Prev, Next } from '@/icons/PlayerIcons'
+import { Pause, Play, Prev, Next, Loop, NoLoop } from '@/icons/PlayerIcons'
 import { Slider } from '@/components/Slider'
 import { Mute, VolumeLow, VolumeMid, VolumeHigh } from '@/icons/Volume'
 
@@ -113,7 +113,7 @@ const VolumeControl = () => {
 }
 
 export function Player () {
-  const { currentMusic, setCurrentMusic, isPlaying, setIsPlaying, volume } = usePlayerStore(state => state)
+  const { currentMusic, setCurrentMusic, isPlaying, setIsPlaying, volume, isOnRepeat, setIsOnRepeat } = usePlayerStore(state => state)
   const audioRef = useRef()
 
   useEffect(() => {
@@ -164,12 +164,26 @@ export function Player () {
     }
   }
 
+  const onRepeat = () => {
+    const { song, playlist, songs } = currentMusic
+    const index = getSongIndex(song.id)
+
+    setIsPlaying(false)
+    setCurrentMusic({ songs, playlist, song: songs[index] })
+    setIsPlaying(true)
+  }
+
   const handleClick = () => {
     setIsPlaying(!isPlaying)
   }
 
   const handleOnEnded = () => {
-    onNextSong()
+    if (isOnRepeat) onRepeat()
+    else onNextSong()
+  }
+
+  const handleRepeatSong = () => {
+    setIsOnRepeat(!isOnRepeat)
   }
 
   return (
@@ -193,6 +207,9 @@ export function Player () {
             </button>
             <button onClick={onNextSong} title="Next">
               <Next />
+            </button>
+            <button onClick={handleRepeatSong} title="Loop">
+              { (isOnRepeat)? <Loop /> : <NoLoop /> }
             </button>
           </div>
           <PlayerControl audio={audioRef} />
