@@ -440,6 +440,15 @@ export const songs: Song[] = [
     "duration": "3:39"
   },
   {
+    "id": 12,
+    "albumId": 7,
+    "title": "En el Muelle de San Blás",
+    "image": "https://t2.genius.com/unsafe/378x378/https%3A%2F%2Fimages.genius.com%2F0e18a79ac4735689b8bb06ae8b4c7e58.1000x1000x1.jpg",
+    "artists": ["Maná"],
+    "album": "Sueños Líquidos",
+    "duration": "5:52"
+  },
+  {
     "id": 1,
     "albumId": 8,
     "title": "99 Luftballons",
