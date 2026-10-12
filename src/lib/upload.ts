@@ -220,34 +220,27 @@ export async function updateSong(
       lyricsPath = null;
       if (oldLyricsPath) removedLyrics.push(oldLyricsPath);
     } else if (oldLyricsPath) {
-      // Edit in place: overwrite the same object, no new file, no orphan.
+      // Text edit on a song that already has lyrics. Always write to a NEW
+      // object instead of overwriting in place: Supabase serves storage
+      // objects through a CDN, so overwriting the same path succeeds but
+      // subsequent downloads can keep returning the stale cached bytes
+      // (save looks fine, no error, but the old text reappears). A fresh
+      // timestamped path busts the cache; the old object is deleted after
+      // the row update commits.
+      const name = `${base}.lrc`;
       const { error: lyrErr } = await supabase.storage
         .from("lyrics")
         .upload(
-          oldLyricsPath,
+          name,
           new Blob([input.lyricsText], { type: "text/plain" }),
-          { upsert: true, contentType: "text/plain" },
+          { upsert: false, contentType: "text/plain" },
         );
       if (lyrErr) {
-        // Fallback for DBs without the UPDATE policy yet: new file, then
-        // delete the old one after the row update succeeds.
-        const name = `${base}.lrc`;
-        const { error: retryErr } = await supabase.storage
-          .from("lyrics")
-          .upload(
-            name,
-            new Blob([input.lyricsText], { type: "text/plain" }),
-            { upsert: false, contentType: "text/plain" },
-          );
-        if (retryErr) {
-          if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
-          return { error: `Could not save lyrics: ${lyrErr.message}` };
-        }
-        lyricsPath = name;
-        replacedLyrics.push({ bucket: "lyrics", oldPath: oldLyricsPath });
-      } else {
-        lyricsPath = oldLyricsPath;
+        if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+        return { error: `Could not save lyrics: ${lyrErr.message}` };
       }
+      lyricsPath = name;
+      replacedLyrics.push({ bucket: "lyrics", oldPath: oldLyricsPath });
     } else {
       const name = `${base}.lrc`;
       const { error: lyrErr } = await supabase.storage
