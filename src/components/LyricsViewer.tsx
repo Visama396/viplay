@@ -134,7 +134,7 @@ export default function LyricsViewer({
                 else lineRefs.current.delete(i);
               }}
               onClick={onSeek ? () => onSeek(line.time + 0.01) : undefined}
-              className={`min-w-0 max-w-full break-words px-1 leading-snug text-balance transition-colors duration-300 ${
+              className={`min-w-0 max-w-full break-words px-1 leading-snug transition-colors duration-300 ${
                 !isActive && !isPast ? "opacity-40" : ""
               } ${
                 onSeek ? "cursor-pointer rounded-lg hover:bg-zinc-800/40" : ""
@@ -144,15 +144,13 @@ export default function LyricsViewer({
                 <p
                   className={
                     isActive
-                      ? "max-w-full text-2xl font-semibold text-balance break-words sm:text-3xl"
+                      ? "max-w-full break-words text-2xl font-semibold sm:text-3xl"
                       : isPast
-                        ? "max-w-full text-xl text-balance break-words text-zinc-300"
-                        : "max-w-full text-xl text-balance break-words text-zinc-600"
+                        ? "max-w-full break-words text-xl text-zinc-300"
+                        : "max-w-full break-words text-xl text-zinc-600"
                   }
                 >
                   {line.words.map((w, j) => {
-                    const sung = w.time <= smoothTime;
-                    const isActiveWord = isActive && active?.wordIndex === j;
                     if (!isActive) {
                       return (
                         <span
@@ -164,42 +162,38 @@ export default function LyricsViewer({
                         </span>
                       );
                     }
-                    if (sung && !isActiveWord) {
-                      return (
-                        <span key={j} className="text-rose-500">
-                          {w.text}
-                          {j < line.words.length - 1 ? " " : ""}
-                        </span>
-                      );
-                    }
-                    if (isActiveWord) {
-                      const progress = active?.wordProgress ?? 0;
-                      return (
-                        <span key={j}>
-                          <span className="relative inline-block">
-                            <span className="text-zinc-600">{w.text}</span>
-                            <span
-                              aria-hidden="true"
-                              className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
-                              style={{ width: `${progress * 100}%` }}
-                            >
-                              {w.text}
-                            </span>
-                          </span>
-                          {j < line.words.length - 1 ? " " : ""}
-                        </span>
-                      );
-                    }
+                    // Uniform structure for every word in the active line:
+                    // each word is always base + absolute overlay, only the
+                    // overlay width changes per frame. Switching element
+                    // types (inline <-> inline-block) on the active word
+                    // caused layout shift / trembling at 60fps.
+                    const sung = w.time <= smoothTime;
+                    const isActiveWord = active?.wordIndex === j;
+                    const overlayWidth =
+                      sung && !isActiveWord
+                        ? 100
+                        : isActiveWord
+                          ? (active?.wordProgress ?? 0) * 100
+                          : 0;
                     return (
-                      <span key={j} className="text-zinc-600">
-                        {w.text}
+                      <span key={j}>
+                        <span className="relative inline-block align-baseline">
+                          <span className="text-zinc-600">{w.text}</span>
+                          <span
+                            aria-hidden="true"
+                            className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
+                            style={{ width: `${overlayWidth}%` }}
+                          >
+                            {w.text}
+                          </span>
+                        </span>
                         {j < line.words.length - 1 ? " " : ""}
                       </span>
                     );
                   })}
                 </p>
               ) : (
-                <div className="max-w-full break-words text-balance">
+                <div className="max-w-full break-words">
                   {(() => {
                     if (!isActive) {
                       return (
@@ -220,6 +214,9 @@ export default function LyricsViewer({
                     // vertical stripe across the whole block — when a long
                     // line wraps, the second visual line got highlighted
                     // before the song reached those words.
+                    // Every token keeps the same DOM shape (base + absolute
+                    // overlay); only the overlay width changes per frame, so
+                    // there is no inline <-> inline-block swap to tremble.
                     const tokens = line.text.split(" ");
                     const floatIdx =
                       (active?.lineProgress ?? 0) * tokens.length;
@@ -227,27 +224,25 @@ export default function LyricsViewer({
                     const frac = floatIdx - fullCount;
                     return (
                       <span className="text-2xl font-semibold sm:text-3xl">
-                        {tokens.map((tok, j) => (
-                          <span key={j}>
-                            {j < fullCount ? (
-                              <span className="text-rose-500">{tok}</span>
-                            ) : j === fullCount ? (
-                              <span className="relative inline-block">
+                        {tokens.map((tok, j) => {
+                          const overlayWidth =
+                            j < fullCount ? 100 : j === fullCount ? frac * 100 : 0;
+                          return (
+                            <span key={j}>
+                              <span className="relative inline-block align-baseline">
                                 <span className="text-zinc-600">{tok}</span>
                                 <span
                                   aria-hidden="true"
                                   className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
-                                  style={{ width: `${frac * 100}%` }}
+                                  style={{ width: `${overlayWidth}%` }}
                                 >
                                   {tok}
                                 </span>
                               </span>
-                            ) : (
-                              <span className="text-zinc-600">{tok}</span>
-                            )}
-                            {j < tokens.length - 1 ? " " : ""}
-                          </span>
-                        ))}
+                              {j < tokens.length - 1 ? " " : ""}
+                            </span>
+                          );
+                        })}
                       </span>
                     );
                   })()}
