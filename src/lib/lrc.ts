@@ -172,6 +172,15 @@ export interface ActiveLyrics {
   lineProgress: number;
 }
 
+/**
+ * Plain LRC has no end tag: a line implicitly ends at the next timestamp.
+ * During instrumental gaps that span can be tens of seconds, so the wipe
+ * is capped — a line counts as fully highlighted a few seconds after it
+ * starts instead of crawling until the next line.
+ */
+const MAX_LINE_WIPE = 6;
+const MAX_WORD_WIPE = 3;
+
 /** Binary search: last index with time <= t, or 0 when t precedes all. */
 function searchByTime(times: number[], t: number): number {
   let lo = 0;
@@ -220,14 +229,18 @@ export function getActiveLyrics(
       time,
     );
     const cur = line.words[wi];
-    const nxt =
-      wi + 1 < line.words.length ? line.words[wi + 1] : next ? { time: next.time } : null;
+    const inLine = wi + 1 < line.words.length;
+    const nxt = inLine ? line.words[wi + 1] : next ? { time: next.time } : null;
     if (cur && nxt && nxt.time > cur.time) {
-      const frac = Math.min(1, Math.max(0, (time - cur.time) / (nxt.time - cur.time)));
+      // Last word borrows the next line's start: cap it so gaps don't crawl.
+      const span = inLine
+        ? nxt.time - cur.time
+        : Math.min(nxt.time - cur.time, MAX_WORD_WIPE);
+      const frac = Math.min(1, Math.max(0, (time - cur.time) / span));
       lineProgress = Math.min(1, (wi + frac) / line.words.length);
     }
   } else if (next) {
-    const span = next.time - line.time;
+    const span = Math.min(next.time - line.time, MAX_LINE_WIPE);
     if (span > 0) lineProgress = Math.min(1, Math.max(0, (time - line.time) / span));
     else lineProgress = time >= line.time ? 1 : 0;
   } else {
@@ -242,16 +255,20 @@ export function getActiveLyrics(
       time,
     );
     const cur = line.words[wordIndex];
-    const nxt =
-      wordIndex + 1 < line.words.length
-        ? line.words[wordIndex + 1]
-        : next
-          ? { time: next.time }
-          : null;
+    const inLine = wordIndex + 1 < line.words.length;
+    const nxt = inLine
+      ? line.words[wordIndex + 1]
+      : next
+        ? { time: next.time }
+        : null;
     if (!cur || cur.time > time) {
       wordProgress = 0;
     } else if (nxt && nxt.time > cur.time) {
-      wordProgress = Math.min(1, Math.max(0, (time - cur.time) / (nxt.time - cur.time)));
+      // Last word borrows the next line's start: cap it so gaps don't crawl.
+      const span = inLine
+        ? nxt.time - cur.time
+        : Math.min(nxt.time - cur.time, MAX_WORD_WIPE);
+      wordProgress = Math.min(1, Math.max(0, (time - cur.time) / span));
     } else {
       wordProgress = 1;
     }

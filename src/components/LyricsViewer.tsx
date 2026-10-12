@@ -67,9 +67,29 @@ export default function LyricsViewer({
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef(new Map<number, HTMLDivElement>());
   const [followActive, setFollowActive] = useState(true);
   const lastAutoScrollAt = useRef(0);
+
+  // Cushion so the first/last line can also reach the vertical center.
+  // When the lyrics overflow the pane, pad top/bottom by ~half the pane
+  // height; short lyrics stay centered via min-h-full + justify-center.
+  const [edgePad, setEdgePad] = useState(0);
+  useEffect(() => {
+    const container = containerRef.current;
+    const inner = innerRef.current;
+    if (!container || !inner) return;
+    const update = () => {
+      const overflow = inner.scrollHeight > container.clientHeight + 1;
+      setEdgePad(overflow ? Math.max(0, container.clientHeight / 2 - 24) : 0);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, [content]);
 
   // Reset follow mode and scroll position when the song/lyrics change.
   useEffect(() => {
@@ -79,13 +99,20 @@ export default function LyricsViewer({
 
   useEffect(() => {
     if (active == null || !followActive) return;
+    const container = containerRef.current;
     const el = lineRefs.current.get(active.lineIndex);
-    if (!el) return;
+    if (!container || !el) return;
     lastAutoScrollAt.current = Date.now();
-    el.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
+    // Center the highlighted line in the pane. scrollIntoView can scroll
+    // outer ancestors instead and is imprecise here, so compute it manually.
+    const cRect = container.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    const top =
+      container.scrollTop +
+      (eRect.top - cRect.top) -
+      container.clientHeight / 2 +
+      eRect.height / 2;
+    container.scrollTo({ top, behavior: "smooth" });
   }, [active?.lineIndex, followActive]);
 
   const handleManualScroll = () => {
@@ -122,7 +149,11 @@ export default function LyricsViewer({
         onScroll={handleManualScroll}
         className="min-h-0 w-full min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-contain"
       >
-        <div className="m-auto flex min-h-full w-full min-w-0 max-w-full flex-col justify-center gap-2 py-4 pb-8 text-center">
+        <div
+          ref={innerRef}
+          style={{ paddingTop: 16 + edgePad, paddingBottom: 32 + edgePad }}
+          className="m-auto flex min-h-full w-full min-w-0 max-w-full flex-col justify-center gap-2 text-center"
+        >
           {parsed.lines.map((line, i) => {
           const isActive = active?.lineIndex === i;
           const isPast = line.time <= smoothTime && !isActive;
@@ -144,13 +175,15 @@ export default function LyricsViewer({
                 <p
                   className={
                     isActive
-                      ? "max-w-full break-words text-2xl font-semibold sm:text-3xl"
+                      ? "text-2xl font-semibold sm:text-3xl"
                       : isPast
-                        ? "max-w-full break-words text-xl text-zinc-300"
-                        : "max-w-full break-words text-xl text-zinc-600"
+                        ? "text-xl text-zinc-300"
+                        : "text-xl text-zinc-600"
                   }
                 >
                   {line.words.map((w, j) => {
+                    const sung = w.time <= smoothTime;
+                    const isActiveWord = isActive && active?.wordIndex === j;
                     if (!isActive) {
                       return (
                         <span
@@ -162,90 +195,66 @@ export default function LyricsViewer({
                         </span>
                       );
                     }
-                    // Uniform structure for every word in the active line:
-                    // each word is always base + absolute overlay, only the
-                    // overlay width changes per frame. Switching element
-                    // types (inline <-> inline-block) on the active word
-                    // caused layout shift / trembling at 60fps.
-                    const sung = w.time <= smoothTime;
-                    const isActiveWord = active?.wordIndex === j;
-                    const overlayWidth =
-                      sung && !isActiveWord
-                        ? 100
-                        : isActiveWord
-                          ? (active?.wordProgress ?? 0) * 100
-                          : 0;
-                    return (
-                      <span key={j}>
-                        <span className="relative inline-block align-baseline">
-                          <span className="text-zinc-600">{w.text}</span>
+                    if (sung && !isActiveWord) {
+                      return (
+                        <span key={j} className="text-rose-500">
+                          {w.text}
+                          {j < line.words.length - 1 ? " " : ""}
+                        </span>
+                      );
+                    }
+                    if (isActiveWord) {
+                      const progress = active?.wordProgress ?? 0;
+                      return (
+                        <span key={j} className="relative inline-block">
+                          <span className="text-zinc-600">
+                            {w.text}
+                            {j < line.words.length - 1 ? "\u00A0" : ""}
+                          </span>
                           <span
                             aria-hidden="true"
                             className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
-                            style={{ width: `${overlayWidth}%` }}
+                            style={{ width: `${progress * 100}%` }}
                           >
                             {w.text}
+                            {j < line.words.length - 1 ? "\u00A0" : ""}
                           </span>
                         </span>
+                      );
+                    }
+                    return (
+                      <span key={j} className="text-zinc-600">
+                        {w.text}
                         {j < line.words.length - 1 ? " " : ""}
                       </span>
                     );
                   })}
                 </p>
               ) : (
-                <div className="max-w-full break-words">
-                  {(() => {
-                    if (!isActive) {
-                      return (
-                        <span
-                          className={
-                            isPast
-                              ? "text-xl text-zinc-300"
-                              : "text-xl text-zinc-600"
-                          }
-                        >
-                          {line.text}
-                        </span>
-                      );
+                <div className="relative">
+                  <span
+                    className={
+                      isActive
+                        ? "text-2xl font-semibold text-zinc-600 sm:text-3xl"
+                        : isPast
+                          ? "text-xl text-zinc-300"
+                          : "text-xl text-zinc-600"
                     }
-                    // Wrap-safe highlight: color word by word instead of an
-                    // absolute overlay wipe. The old overlay used
-                    // `absolute inset-0` + background-size %, which paints a
-                    // vertical stripe across the whole block — when a long
-                    // line wraps, the second visual line got highlighted
-                    // before the song reached those words.
-                    // Every token keeps the same DOM shape (base + absolute
-                    // overlay); only the overlay width changes per frame, so
-                    // there is no inline <-> inline-block swap to tremble.
-                    const tokens = line.text.split(" ");
-                    const floatIdx =
-                      (active?.lineProgress ?? 0) * tokens.length;
-                    const fullCount = Math.floor(floatIdx);
-                    const frac = floatIdx - fullCount;
-                    return (
-                      <span className="text-2xl font-semibold sm:text-3xl">
-                        {tokens.map((tok, j) => {
-                          const overlayWidth =
-                            j < fullCount ? 100 : j === fullCount ? frac * 100 : 0;
-                          return (
-                            <span key={j}>
-                              <span className="relative inline-block align-baseline">
-                                <span className="text-zinc-600">{tok}</span>
-                                <span
-                                  aria-hidden="true"
-                                  className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
-                                  style={{ width: `${overlayWidth}%` }}
-                                >
-                                  {tok}
-                                </span>
-                              </span>
-                              {j < tokens.length - 1 ? " " : ""}
-                            </span>
-                          );
-                        })}
-                      </span>
-                    );
-                  })()}
+                  >
+                    {line.text}
+                  </span>
+                  {isActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-2xl font-semibold text-transparent sm:text-3xl"
+                      style={{
+                        backgroundSize: `${(active?.lineProgress ?? 0) * 100}% 100%`,
+                        backgroundRepeat: "no-repeat",
+                      }}
+                    >
+                      {line.text}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
