@@ -68,14 +68,32 @@ export default function LyricsViewer({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef(new Map<number, HTMLDivElement>());
+  const [followActive, setFollowActive] = useState(true);
+  const lastAutoScrollAt = useRef(0);
+
+  // Reset follow mode and scroll position when the song/lyrics change.
+  useEffect(() => {
+    setFollowActive(true);
+    containerRef.current?.scrollTo({ top: 0 });
+  }, [content]);
 
   useEffect(() => {
-    if (active == null) return;
-    lineRefs.current.get(active.lineIndex)?.scrollIntoView({
+    if (active == null || !followActive) return;
+    const el = lineRefs.current.get(active.lineIndex);
+    if (!el) return;
+    lastAutoScrollAt.current = Date.now();
+    el.scrollIntoView({
       behavior: "smooth",
       block: "center",
     });
-  }, [active?.lineIndex]);
+  }, [active?.lineIndex, followActive]);
+
+  const handleManualScroll = () => {
+    // Ignore scroll events caused by our own auto-scroll so follow mode
+    // isn't disabled by the smooth scrollIntoView above.
+    if (Date.now() - lastAutoScrollAt.current < 800) return;
+    setFollowActive(false);
+  };
 
   if (!content) {
     return (
@@ -86,16 +104,26 @@ export default function LyricsViewer({
   }
 
   if (!parsed || parsed.lines.length === 0) {
-    return <div className="whitespace-pre-wrap text-zinc-300">{content}</div>;
+    return (
+      <div className="flex min-h-0 w-full flex-1 flex-col px-6">
+        <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain py-4">
+          <div className="whitespace-pre-wrap break-words text-zinc-300">
+            {content}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center px-6">
+    <div className="flex min-h-0 w-full flex-1 flex-col items-center px-6">
       <div
         ref={containerRef}
-        className="flex min-h-0 w-full flex-1 flex-col justify-center gap-2 overflow-y-auto py-4 text-center"
+        onScroll={handleManualScroll}
+        className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain"
       >
-        {parsed.lines.map((line, i) => {
+        <div className="m-auto flex min-h-full w-full flex-col justify-center gap-2 py-4 pb-8 text-center">
+          {parsed.lines.map((line, i) => {
           const isActive = active?.lineIndex === i;
           const isPast = line.time <= smoothTime && !isActive;
           return (
@@ -201,8 +229,17 @@ export default function LyricsViewer({
             </div>
           );
         })}
+        </div>
       </div>
-      <div className="flex items-center gap-2 pb-2 text-xs tabular-nums text-zinc-500">
+      <div className="flex shrink-0 items-center gap-2 pb-2 text-xs tabular-nums text-zinc-500">
+        {!followActive && (
+          <button
+            onClick={() => setFollowActive(true)}
+            className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition hover:bg-zinc-700 hover:text-white"
+          >
+            Follow lyrics
+          </button>
+        )}
         <span>{secondsToTime(smoothTime)}</span>
         {parsed.hasWordTiming ? (
           <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-400">
