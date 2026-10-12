@@ -231,8 +231,8 @@ export default function Player({
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1 items-stretch justify-center gap-8 overflow-hidden px-6">
-            <div className="flex min-h-0 w-full max-w-2xl flex-1">
+          <div className="flex min-h-0 flex-1 items-stretch justify-center gap-8 overflow-hidden px-4">
+            <div className="flex min-h-0 w-full min-w-0 max-w-4xl flex-1">
               <LyricsViewer
                 content={lyrics}
                 currentTime={currentTime}

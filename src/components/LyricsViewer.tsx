@@ -116,13 +116,13 @@ export default function LyricsViewer({
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col items-center px-6">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col items-center px-4">
       <div
         ref={containerRef}
         onScroll={handleManualScroll}
-        className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain"
+        className="min-h-0 w-full min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-contain"
       >
-        <div className="m-auto flex min-h-full w-full flex-col justify-center gap-2 py-4 pb-8 text-center">
+        <div className="m-auto flex min-h-full w-full min-w-0 max-w-full flex-col justify-center gap-2 py-4 pb-8 text-center">
           {parsed.lines.map((line, i) => {
           const isActive = active?.lineIndex === i;
           const isPast = line.time <= smoothTime && !isActive;
@@ -134,9 +134,9 @@ export default function LyricsViewer({
                 else lineRefs.current.delete(i);
               }}
               onClick={onSeek ? () => onSeek(line.time + 0.01) : undefined}
-              className={`leading-snug transition-all duration-300 ${
-                isActive ? "scale-[1.02]" : ""
-              } ${!isActive && !isPast ? "opacity-40" : ""} ${
+              className={`min-w-0 max-w-full break-words px-1 leading-snug text-balance transition-colors duration-300 ${
+                !isActive && !isPast ? "opacity-40" : ""
+              } ${
                 onSeek ? "cursor-pointer rounded-lg hover:bg-zinc-800/40" : ""
               }`}
             >
@@ -144,10 +144,10 @@ export default function LyricsViewer({
                 <p
                   className={
                     isActive
-                      ? "text-2xl font-semibold sm:text-3xl"
+                      ? "max-w-full text-2xl font-semibold text-balance break-words sm:text-3xl"
                       : isPast
-                        ? "text-xl text-zinc-300"
-                        : "text-xl text-zinc-600"
+                        ? "max-w-full text-xl text-balance break-words text-zinc-300"
+                        : "max-w-full text-xl text-balance break-words text-zinc-600"
                   }
                 >
                   {line.words.map((w, j) => {
@@ -175,19 +175,18 @@ export default function LyricsViewer({
                     if (isActiveWord) {
                       const progress = active?.wordProgress ?? 0;
                       return (
-                        <span key={j} className="relative inline-block">
-                          <span className="text-zinc-600">
-                            {w.text}
-                            {j < line.words.length - 1 ? "\u00A0" : ""}
+                        <span key={j}>
+                          <span className="relative inline-block">
+                            <span className="text-zinc-600">{w.text}</span>
+                            <span
+                              aria-hidden="true"
+                              className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
+                              style={{ width: `${progress * 100}%` }}
+                            >
+                              {w.text}
+                            </span>
                           </span>
-                          <span
-                            aria-hidden="true"
-                            className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
-                            style={{ width: `${progress * 100}%` }}
-                          >
-                            {w.text}
-                            {j < line.words.length - 1 ? "\u00A0" : ""}
-                          </span>
+                          {j < line.words.length - 1 ? " " : ""}
                         </span>
                       );
                     }
@@ -200,30 +199,58 @@ export default function LyricsViewer({
                   })}
                 </p>
               ) : (
-                <div className="relative">
-                  <span
-                    className={
-                      isActive
-                        ? "text-2xl font-semibold text-zinc-600 sm:text-3xl"
-                        : isPast
-                          ? "text-xl text-zinc-300"
-                          : "text-xl text-zinc-600"
+                <div className="max-w-full break-words text-balance">
+                  {(() => {
+                    if (!isActive) {
+                      return (
+                        <span
+                          className={
+                            isPast
+                              ? "text-xl text-zinc-300"
+                              : "text-xl text-zinc-600"
+                          }
+                        >
+                          {line.text}
+                        </span>
+                      );
                     }
-                  >
-                    {line.text}
-                  </span>
-                  {isActive && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-0 bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-2xl font-semibold text-transparent sm:text-3xl"
-                      style={{
-                        backgroundSize: `${(active?.lineProgress ?? 0) * 100}% 100%`,
-                        backgroundRepeat: "no-repeat",
-                      }}
-                    >
-                      {line.text}
-                    </span>
-                  )}
+                    // Wrap-safe highlight: color word by word instead of an
+                    // absolute overlay wipe. The old overlay used
+                    // `absolute inset-0` + background-size %, which paints a
+                    // vertical stripe across the whole block — when a long
+                    // line wraps, the second visual line got highlighted
+                    // before the song reached those words.
+                    const tokens = line.text.split(" ");
+                    const floatIdx =
+                      (active?.lineProgress ?? 0) * tokens.length;
+                    const fullCount = Math.floor(floatIdx);
+                    const frac = floatIdx - fullCount;
+                    return (
+                      <span className="text-2xl font-semibold sm:text-3xl">
+                        {tokens.map((tok, j) => (
+                          <span key={j}>
+                            {j < fullCount ? (
+                              <span className="text-rose-500">{tok}</span>
+                            ) : j === fullCount ? (
+                              <span className="relative inline-block">
+                                <span className="text-zinc-600">{tok}</span>
+                                <span
+                                  aria-hidden="true"
+                                  className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
+                                  style={{ width: `${frac * 100}%` }}
+                                >
+                                  {tok}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-zinc-600">{tok}</span>
+                            )}
+                            {j < tokens.length - 1 ? " " : ""}
+                          </span>
+                        ))}
+                      </span>
+                    );
+                  })()}
                 </div>
               )}
             </div>
