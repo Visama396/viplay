@@ -65,6 +65,20 @@ export async function register(
   return account ? { account } : { error: "Could not create profile" };
 }
 
+// Supabase hides details behind generic messages, so map the known ones to
+// actionable text instead of swallowing them (helps tell "wrong password"
+// apart from "account doesn't exist here" or "email not confirmed").
+function friendlyAuthError(message?: string): string {
+  if (!message) return "Invalid username or password";
+  if (/email not confirmed/i.test(message)) {
+    return "Account email not confirmed. Supabase Auth requires confirmation for this project.";
+  }
+  if (/invalid login credentials/i.test(message)) {
+    return "Invalid username or password";
+  }
+  return message;
+}
+
 export async function login(
   username: string,
   password: string,
@@ -76,7 +90,7 @@ export async function login(
     password,
   });
 
-  if (error || !data.user) return { error: "Invalid username or password" };
+  if (error || !data.user) return { error: friendlyAuthError(error?.message) };
 
   const account = await linkAccount(cleanName, cleanName);
   return account ? { account } : { error: "Could not load profile" };
