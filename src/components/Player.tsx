@@ -115,6 +115,96 @@ export default function Player({
 
   const toggle = () => setPlaying((p) => !p);
 
+  // Expose the current track to the OS (iPhone lock screen / notification
+  // panel). Without this, iOS falls back to the page title ("Viplay") and
+  // the favicon. Guarded: desktop browsers without Media Session ignore it.
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !song) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: song.title,
+        artist: song.artist,
+        album: song.album ?? undefined,
+        artwork: song.artwork_path
+          ? [
+              {
+                src: getPublicUrl("artwork", song.artwork_path),
+                sizes: "512x512",
+              },
+            ]
+          : [],
+      });
+    } catch {
+      // Older browsers: ignore.
+    }
+  }, [song?.id, song?.title, song?.artist, song?.album, song?.artwork_path]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    try {
+      navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+    } catch {
+      // Ignore.
+    }
+  }, [playing]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    const skip = (delta: number) => {
+      const a = audioRef.current;
+      if (!a || Number.isNaN(a.currentTime)) return;
+      const dur = Number.isNaN(a.duration) ? Infinity : a.duration;
+      a.currentTime = Math.min(Math.max(0, a.currentTime + delta), dur);
+      setCurrentTime(a.currentTime);
+    };
+    try {
+      ms.setActionHandler("play", () => setPlaying(true));
+      ms.setActionHandler("pause", () => setPlaying(false));
+      ms.setActionHandler("previoustrack", () => onPrev());
+      ms.setActionHandler("nexttrack", () => onNext());
+      ms.setActionHandler("seekbackward", (d) => skip(-(d.seekOffset ?? 10)));
+      ms.setActionHandler("seekforward", (d) => skip(d.seekOffset ?? 10));
+      ms.setActionHandler("seekto", (d) => {
+        const a = audioRef.current;
+        if (a && typeof d.seekTime === "number") {
+          a.currentTime = d.seekTime;
+          setCurrentTime(d.seekTime);
+        }
+      });
+    } catch {
+      // setActionHandler throws for unsupported actions: ignore.
+    }
+    return () => {
+      try {
+        ms.setActionHandler("play", null);
+        ms.setActionHandler("pause", null);
+        ms.setActionHandler("previoustrack", null);
+        ms.setActionHandler("nexttrack", null);
+        ms.setActionHandler("seekbackward", null);
+        ms.setActionHandler("seekforward", null);
+        ms.setActionHandler("seekto", null);
+      } catch {
+        // Ignore.
+      }
+    };
+  }, [onPrev, onNext]);
+
+  // Keep the lock-screen progress bar in sync where supported.
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !("setPositionState" in navigator.mediaSession)) return;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: 1,
+        position: Math.min(Math.max(0, currentTime), duration),
+      });
+    } catch {
+      // Ignore (e.g. position out of range during track switch).
+    }
+  }, [currentTime, duration, song?.id]);
+
   if (!song) return null;
 
   const playIcon = playing ? (

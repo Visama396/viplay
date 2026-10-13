@@ -1,6 +1,8 @@
 export interface LyricWord {
   time: number;
   text: string;
+  /** Optional end time (<time> tag with no text after it). Creates a pause gap. */
+  end?: number;
 }
 
 export interface LyricLine {
@@ -17,6 +19,8 @@ export interface ParsedLyrics {
   metadata: Record<string, string>;
   /** True when at least one line carries per-word timings. */
   hasWordTiming: boolean;
+  /** Lines without timestamps (e.g. unfinished sync). Shown as static tail. */
+  untimed: string[];
 }
 
 const TIME_TAG = /\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]/g;
@@ -60,6 +64,7 @@ export function parseLrc(content: string): ParsedLyrics {
   const offset = Number.isNaN(offsetMs) ? 0 : offsetMs / 1000;
 
   const lines: LyricLine[] = [];
+  const untimed: string[] = [];
 
   for (const raw of content.split(/\r?\n/)) {
     const line = raw.trim();
@@ -73,7 +78,13 @@ export function parseLrc(content: string): ParsedLyrics {
 
     // Collect leading [mm:ss.xx] tags as line start times.
     const leading = line.match(LEADING_TAGS);
-    if (!leading) continue;
+    if (!leading) {
+      // No timestamp: unfinished sync. Keep the text so the rest of the
+      // song is still readable below the synced lines.
+      const text = line.replace(TIME_TAG, "").replace(WORD_TAG, "").trim();
+      if (text) untimed.push(text);
+      continue;
+    }
     const leadingTags = [...leading[0].matchAll(/\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]/g)];
     if (leadingTags.length === 0) continue;
 
@@ -103,11 +114,14 @@ export function parseLrc(content: string): ParsedLyrics {
 
     // Enhanced line: text before the first word tag belongs to the line time,
     // each <tag> starts a new word running until the next tag.
-    const baseWords: { time: number; text: string }[] = [];
+    // A <tag> with no text after it (before the next tag or end of line)
+    // is an end tag: it finishes the previous word, leaving a pause gap
+    // until the next word starts.
+    const baseWords: { time: number; text: string; end?: number; pre?: boolean }[] = [];
     const firstIdx = wordMatches[0].index ?? 0;
     const preText = remainder.slice(0, firstIdx).trim();
     // Placeholder time; fixed per lineTime below.
-    if (preText) baseWords.push({ time: 0, text: preText, pre: true } as never);
+    if (preText) baseWords.push({ time: 0, text: preText, pre: true });
 
     wordMatches.forEach((m, i) => {
       const wt = parseTimeTag(m[1], m[2], m[3]) + offset;
@@ -117,7 +131,11 @@ export function parseLrc(content: string): ParsedLyrics {
           ? (wordMatches[i + 1].index ?? remainder.length)
           : remainder.length;
       const wtext = remainder.slice(start, end).trim();
-      if (!wtext) return;
+      if (!wtext) {
+        const prev = baseWords[baseWords.length - 1];
+        if (prev && prev.end == null && wt > prev.time) prev.end = wt;
+        return;
+      }
       baseWords.push({ time: wt, text: wtext });
     });
 
@@ -129,11 +147,13 @@ export function parseLrc(content: string): ParsedLyrics {
     const anchor = lineTimes[0];
     for (const lt of lineTimes) {
       const delta = lt - anchor;
-      const words: LyricWord[] = baseWords.map((w, i) => ({
+      const words: LyricWord[] = baseWords.map((w) => {
         // First chunk before any <tag> inherits the line start time.
-        time: (w as { pre?: boolean }).pre ? lt : w.time + delta,
-        text: w.text,
-      }));
+        const time = w.pre ? lt : w.time + delta;
+        let end = w.end != null ? w.end + delta : undefined;
+        if (end != null && end <= time) end = undefined;
+        return { time, end, text: w.text };
+      });
       words.sort((a, b) => a.time - b.time);
       const startTime = Math.min(lt, words[0]?.time ?? lt);
       lines.push({ time: startTime, endTime: null, text: cleanText, words });
@@ -146,7 +166,7 @@ export function parseLrc(content: string): ParsedLyrics {
   }
 
   const hasWordTiming = lines.some((l) => l.words.length > 1);
-  return { lines, metadata, hasWordTiming };
+  return { lines, metadata, hasWordTiming, untimed };
 }
 
 /**
@@ -232,10 +252,15 @@ export function getActiveLyrics(
     const inLine = wi + 1 < line.words.length;
     const nxt = inLine ? line.words[wi + 1] : next ? { time: next.time } : null;
     if (cur && nxt && nxt.time > cur.time) {
+      // A word with an explicit end tag wipes start->end, then freezes
+      // (pause gap) instead of crawling to the next word.
       // Last word borrows the next line's start: cap it so gaps don't crawl.
-      const span = inLine
-        ? nxt.time - cur.time
-        : Math.min(nxt.time - cur.time, MAX_WORD_WIPE);
+      const span =
+        cur.end != null && cur.end > cur.time
+          ? cur.end - cur.time
+          : inLine
+            ? nxt.time - cur.time
+            : Math.min(nxt.time - cur.time, MAX_WORD_WIPE);
       const frac = Math.min(1, Math.max(0, (time - cur.time) / span));
       lineProgress = Math.min(1, (wi + frac) / line.words.length);
     }
@@ -264,10 +289,14 @@ export function getActiveLyrics(
     if (!cur || cur.time > time) {
       wordProgress = 0;
     } else if (nxt && nxt.time > cur.time) {
+      // Explicit end tag: wipe start->end, then hold full during the gap.
       // Last word borrows the next line's start: cap it so gaps don't crawl.
-      const span = inLine
-        ? nxt.time - cur.time
-        : Math.min(nxt.time - cur.time, MAX_WORD_WIPE);
+      const span =
+        cur.end != null && cur.end > cur.time
+          ? cur.end - cur.time
+          : inLine
+            ? nxt.time - cur.time
+            : Math.min(nxt.time - cur.time, MAX_WORD_WIPE);
       wordProgress = Math.min(1, Math.max(0, (time - cur.time) / span));
     } else {
       wordProgress = 1;

@@ -131,6 +131,11 @@ Word-level karaoke uses inline tags:
 [00:12.34] <00:12.34>First <00:12.70>line <00:13.10>of the song
 ```
 
+A `<mm:ss.xx>` tag with no text after it (before the next tag or end of
+line) ends the previous word, leaving a pause gap. E.g.
+`[00:09.00]phrase<00:13.00> <00:16.00>Ah` finishes `phrase` at 13s and
+starts `Ah` at 16s.
+
 Multiple timestamps on one line and `[offset:]` metadata are supported. Upcoming
 lines are dimmed and centered; the active line is enlarged and filled with color
 in time with the singer.

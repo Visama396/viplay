@@ -25,9 +25,12 @@ export default function LyricsViewer({
 }: LyricsViewerProps) {
   const hasSecondary = Boolean(secondaryContent?.trim());
   const [mode, setMode] = useState<"primary" | "secondary">("primary");
+  // Karaoke wipe on/off. Defaults on; only applies when word timings exist.
+  const [karaoke, setKaraoke] = useState(true);
   // Reset to the original track when the song (or either track) changes.
   useEffect(() => {
     setMode("primary");
+    setKaraoke(true);
   }, [content, secondaryContent]);
 
   const activeContent =
@@ -43,6 +46,8 @@ export default function LyricsViewer({
       return null;
     }
   }, [activeContent]);
+
+  const showKaraoke = (parsed?.hasWordTiming ?? false) && karaoke;
 
   // Smooth clock: rAF reading the audio element directly. Falls back to the
   // coarse currentTime prop when no ref is available (or element unmounted).
@@ -198,7 +203,7 @@ export default function LyricsViewer({
                 onSeek ? "cursor-pointer rounded-lg hover:bg-zinc-800/40" : ""
               }`}
             >
-              {line.words.length > 1 ? (
+              {showKaraoke && line.words.length > 1 ? (
                 <p
                   className={
                     isActive
@@ -222,71 +227,130 @@ export default function LyricsViewer({
                         </span>
                       );
                     }
-                    if (sung && !isActiveWord) {
-                      return (
-                        <span key={j} className="text-rose-500">
-                          {w.text}
-                          {j < line.words.length - 1 ? " " : ""}
-                        </span>
-                      );
-                    }
-                    if (isActiveWord) {
-                      const progress = active?.wordProgress ?? 0;
-                      return (
-                        <span key={j} className="relative inline-block">
+                    // Uniform structure for every word in the active line:
+                    // each word is always base + absolute overlay, only the
+                    // overlay width changes per frame. Switching element
+                    // types (inline <-> inline-block) on the active word
+                    // caused layout shift / trembling at 60fps.
+                    // Overlay is left-anchored + text-left + nowrap so the
+                    // inherited text-center doesn't recenter the clipped
+                    // text inside the narrow wipe box (drift right bug).
+                    const overlayWidth =
+                      sung && !isActiveWord
+                        ? 100
+                        : isActiveWord
+                          ? (active?.wordProgress ?? 0) * 100
+                          : 0;
+                    return (
+                      <span key={j}>
+                        <span className="relative inline-block align-baseline">
                           <span className="text-zinc-600">
                             {w.text}
                             {j < line.words.length - 1 ? "\u00A0" : ""}
                           </span>
                           <span
                             aria-hidden="true"
-                            className="absolute inset-0 overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-transparent"
-                            style={{ width: `${progress * 100}%` }}
+                            className="absolute left-0 top-0 h-full overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-left whitespace-nowrap text-transparent"
+                            style={{ width: `${overlayWidth}%` }}
                           >
                             {w.text}
                             {j < line.words.length - 1 ? "\u00A0" : ""}
                           </span>
                         </span>
-                      );
-                    }
-                    return (
-                      <span key={j} className="text-zinc-600">
-                        {w.text}
                         {j < line.words.length - 1 ? " " : ""}
                       </span>
                     );
                   })}
                 </p>
-              ) : (
-                <div className="relative">
-                  <span
-                    className={
-                      isActive
-                        ? "text-2xl font-semibold text-zinc-600 sm:text-3xl"
-                        : isPast
-                          ? "text-xl text-zinc-300"
-                          : "text-xl text-zinc-600"
+              ) : showKaraoke ? (
+                <div className="max-w-full break-words">
+                  {(() => {
+                    if (!isActive) {
+                      return (
+                        <span
+                          className={
+                            isPast
+                              ? "text-xl text-zinc-300"
+                              : "text-xl text-zinc-600"
+                          }
+                        >
+                          {line.text}
+                        </span>
+                      );
                     }
-                  >
-                    {line.text}
-                  </span>
-                  {isActive && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-0 bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-2xl font-semibold text-transparent sm:text-3xl"
-                      style={{
-                        backgroundSize: `${(active?.lineProgress ?? 0) * 100}% 100%`,
-                        backgroundRepeat: "no-repeat",
-                      }}
-                    >
-                      {line.text}
-                    </span>
-                  )}
+                    // Wrap-safe highlight: color token by token instead of an
+                    // absolute overlay wipe. The overlay used
+                    // `absolute inset-0` + background-size %, which paints a
+                    // vertical stripe across the whole block — when a long
+                    // line wraps (common on narrow phones), the second visual
+                    // line got highlighted before those words were sung.
+                    // Every token keeps the same DOM shape (base + absolute
+                    // overlay); only the overlay width changes per frame, so
+                    // there is no inline <-> inline-block swap to tremble.
+                    // Overlay is left-anchored + text-left + nowrap so the
+                    // inherited text-center doesn't recenter the clipped
+                    // text inside the narrow wipe box (drift right bug).
+                    const tokens = line.text.split(" ");
+                    const floatIdx =
+                      (active?.lineProgress ?? 0) * tokens.length;
+                    const fullCount = Math.floor(floatIdx);
+                    const frac = floatIdx - fullCount;
+                    return (
+                      <span className="text-2xl font-semibold sm:text-3xl">
+                        {tokens.map((tok, j) => {
+                          const overlayWidth =
+                            j < fullCount ? 100 : j === fullCount ? frac * 100 : 0;
+                          return (
+                            <span key={j}>
+                              <span className="relative inline-block align-baseline">
+                                <span className="text-zinc-600">{tok}</span>
+                                <span
+                                  aria-hidden="true"
+                                  className="absolute left-0 top-0 h-full overflow-hidden bg-gradient-to-r from-rose-500 to-pink-400 bg-clip-text text-left whitespace-nowrap text-transparent"
+                                  style={{ width: `${overlayWidth}%` }}
+                                >
+                                  {tok}
+                                </span>
+                              </span>
+                              {j < tokens.length - 1 ? " " : ""}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    );
+                  })()}
                 </div>
+              ) : (
+                <p
+                  className={
+                    isActive
+                      ? "text-2xl font-semibold text-rose-500 sm:text-3xl"
+                      : isPast
+                        ? "text-xl text-zinc-300"
+                        : "text-xl text-zinc-600"
+                  }
+                >
+                  {line.text}
+                </p>
               )}
             </div>
           );
         })}
+          {parsed.untimed.length > 0 && (
+            <div className="mt-4 border-t border-zinc-800/60 pt-4">
+              <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                Unsynced
+              </div>
+              {parsed.untimed.map((t, idx) => (
+                <div
+                  key={`untimed-${idx}`}
+                  className="break-words px-1 text-xl leading-snug text-zinc-400"
+                >
+                  {t}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2 pb-2 text-xs tabular-nums text-zinc-500">
@@ -300,9 +364,28 @@ export default function LyricsViewer({
         )}
         <span>{secondsToTime(smoothTime)}</span>
         {parsed.hasWordTiming ? (
-          <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-400">
-            Karaoke
-          </span>
+          <div className="flex items-center gap-1 rounded-full bg-zinc-900 p-1">
+            <button
+              type="button"
+              onClick={() => setKaraoke(true)}
+              aria-pressed={karaoke}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                karaoke ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Karaoke
+            </button>
+            <button
+              type="button"
+              onClick={() => setKaraoke(false)}
+              aria-pressed={!karaoke}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                !karaoke ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Synced
+            </button>
+          </div>
         ) : (
           <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
             Synced
