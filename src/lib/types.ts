@@ -7,6 +7,10 @@ export interface Song {
   audio_path: string;
   artwork_path: string | null;
   lyrics_path: string | null;
+  /** Optional second lyrics track (e.g. romanized/transliterated LRC). */
+  secondary_lyrics_path: string | null;
+  /** Label for the secondary track shown in the toggle (e.g. "Romanized"). */
+  secondary_lyrics_label: string | null;
   uploaded_by: string | null;
   created_at: string;
 }

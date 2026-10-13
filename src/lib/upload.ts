@@ -10,6 +10,12 @@ export interface UploadInput {
   lyrics?: File;
   /** Inline LRC text. Used when no lyrics file is provided. */
   lyricsText?: string;
+  /** Optional second LRC track (e.g. romanized/transliterated lyrics). */
+  secondaryLyrics?: File;
+  /** Inline LRC text for the secondary track. */
+  secondaryLyricsText?: string;
+  /** Label shown in the player toggle, e.g. "Romanized". */
+  secondaryLyricsLabel?: string;
   uploadedBy: string;
 }
 
@@ -109,6 +115,41 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
     }
   }
 
+  let secondaryLyricsPath: string | null = null;
+  let secondaryLyricsLabel: string | null = null;
+  if (input.secondaryLyrics) {
+    secondaryLyricsPath = `${base}-alt.lrc`;
+    const { error: altErr } = await supabase.storage
+      .from("lyrics")
+      .upload(secondaryLyricsPath, input.secondaryLyrics, {
+        upsert: false,
+        contentType: contentType(input.secondaryLyrics),
+      });
+    if (altErr) {
+      await supabase.storage.from("audio").remove([audioPath]);
+      if (artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
+      if (lyricsPath) await supabase.storage.from("lyrics").remove([lyricsPath]);
+      return { error: `Could not upload secondary lyrics: ${altErr.message}` };
+    }
+    secondaryLyricsLabel = input.secondaryLyricsLabel?.trim() || "Romanized";
+  } else if (input.secondaryLyricsText?.trim()) {
+    secondaryLyricsPath = `${base}-alt.lrc`;
+    const { error: altErr } = await supabase.storage
+      .from("lyrics")
+      .upload(
+        secondaryLyricsPath,
+        new Blob([input.secondaryLyricsText], { type: "text/plain" }),
+        { upsert: false, contentType: "text/plain" },
+      );
+    if (altErr) {
+      await supabase.storage.from("audio").remove([audioPath]);
+      if (artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
+      if (lyricsPath) await supabase.storage.from("lyrics").remove([lyricsPath]);
+      return { error: `Could not save secondary lyrics: ${altErr.message}` };
+    }
+    secondaryLyricsLabel = input.secondaryLyricsLabel?.trim() || "Romanized";
+  }
+
   const duration = await readAudioDuration(input.audio);
 
   const { data, error } = await supabase
@@ -121,6 +162,8 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
       audio_path: audioPath,
       artwork_path: artworkPath,
       lyrics_path: lyricsPath,
+      secondary_lyrics_path: secondaryLyricsPath,
+      secondary_lyrics_label: secondaryLyricsLabel,
       uploaded_by: input.uploadedBy,
     })
     .select()
@@ -130,6 +173,7 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
     await supabase.storage.from("audio").remove([audioPath]);
     if (artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
     if (lyricsPath) await supabase.storage.from("lyrics").remove([lyricsPath]);
+    if (secondaryLyricsPath) await supabase.storage.from("lyrics").remove([secondaryLyricsPath]);
     return { error: `Could not save song: ${error.message}` };
   }
 
@@ -144,6 +188,11 @@ export interface EditInput {
   lyrics?: File;
   /** Inline LRC text. Empty string clears lyrics; null/undefined leaves them unchanged. */
   lyricsText?: string | null;
+  secondaryLyrics?: File;
+  /** Inline LRC text for the secondary track. Empty string clears it; null/undefined leaves it unchanged. */
+  secondaryLyricsText?: string | null;
+  /** Label for the secondary track. Null/undefined leaves it unchanged. */
+  secondaryLyricsLabel?: string | null;
 }
 
 /**
@@ -171,7 +220,7 @@ export async function updateSong(
 
   const { data: song, error: fetchErr } = await supabase
     .from("songs")
-    .select("artwork_path, lyrics_path")
+    .select("artwork_path, lyrics_path, secondary_lyrics_path, secondary_lyrics_label")
     .eq("id", songId)
     .maybeSingle();
   if (fetchErr) return { error: `Could not load song: ${fetchErr.message}` };
@@ -181,6 +230,7 @@ export async function updateSong(
 
   const oldArtworkPath: string | null = song.artwork_path;
   const oldLyricsPath: string | null = song.lyrics_path;
+  const oldSecondaryPath: string | null = song.secondary_lyrics_path ?? null;
 
   // Paths replaced by a new upload. The old objects are deleted only after
   // the songs row update succeeds, so a DB failure never loses the file.
@@ -258,6 +308,64 @@ export async function updateSong(
     }
   }
 
+  let secondaryPath: string | null = song.secondary_lyrics_path ?? null;
+  let secondaryLabel: string | null = song.secondary_lyrics_label ?? null;
+  const resolveSecondaryLabel = (explicit: string | null | undefined): string => {
+    if (explicit != null) return explicit.trim() || "Romanized";
+    return secondaryLabel?.trim() || "Romanized";
+  };
+  async function uploadSecondaryBlob(text: string): Promise<{ path?: string; error?: string }> {
+    // Same CDN-cache rule as primary lyrics: always a fresh timestamped path.
+    const name = `${base}-alt.lrc`;
+    const { error: altErr } = await supabase.storage
+      .from("lyrics")
+      .upload(name, new Blob([text], { type: "text/plain" }), {
+        upsert: false,
+        contentType: "text/plain",
+      });
+    if (altErr) return { error: `Could not save secondary lyrics: ${altErr.message}` };
+    return { path: name };
+  }
+
+  if (input.secondaryLyrics) {
+    const name = `${base}-alt.lrc`;
+    const { error: altErr } = await supabase.storage
+      .from("lyrics")
+      .upload(name, input.secondaryLyrics, { upsert: false, contentType: contentType(input.secondaryLyrics) });
+    if (altErr) {
+      if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+      if (lyricsPath && lyricsPath !== song.lyrics_path) await supabase.storage.from("lyrics").remove([lyricsPath]);
+      return { error: `Could not upload secondary lyrics: ${altErr.message}` };
+    }
+    if (oldSecondaryPath && oldSecondaryPath !== name) {
+      replacedLyrics.push({ bucket: "lyrics", oldPath: oldSecondaryPath });
+    }
+    secondaryPath = name;
+    secondaryLabel = resolveSecondaryLabel(input.secondaryLyricsLabel);
+  } else if (input.secondaryLyricsText != null) {
+    if (input.secondaryLyricsText.trim() === "") {
+      secondaryPath = null;
+      secondaryLabel = null;
+      if (oldSecondaryPath) removedLyrics.push(oldSecondaryPath);
+    } else {
+      const res = await uploadSecondaryBlob(input.secondaryLyricsText);
+      if (res.error) {
+        if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+        if (lyricsPath && lyricsPath !== song.lyrics_path) await supabase.storage.from("lyrics").remove([lyricsPath]);
+        return { error: res.error };
+      }
+      if (oldSecondaryPath && oldSecondaryPath !== res.path) {
+        replacedLyrics.push({ bucket: "lyrics", oldPath: oldSecondaryPath });
+      }
+      secondaryPath = res.path ?? null;
+      secondaryLabel = resolveSecondaryLabel(input.secondaryLyricsLabel);
+    }
+  } else if (input.secondaryLyricsLabel != null) {
+    // Label-only change (no new file/text).
+    if (secondaryPath) secondaryLabel = input.secondaryLyricsLabel.trim() || "Romanized";
+    else secondaryLabel = null;
+  }
+
   const { error: updateErr } = await supabase
     .from("songs")
     .update({
@@ -266,12 +374,15 @@ export async function updateSong(
       album: input.album?.trim() || null,
       artwork_path: artworkPath,
       lyrics_path: lyricsPath,
+      secondary_lyrics_path: secondaryPath,
+      secondary_lyrics_label: secondaryPath ? secondaryLabel : null,
     })
     .eq("id", songId);
 
   if (updateErr) {
     if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
     if (lyricsPath && lyricsPath !== song.lyrics_path) await supabase.storage.from("lyrics").remove([lyricsPath]);
+    if (secondaryPath && secondaryPath !== oldSecondaryPath) await supabase.storage.from("lyrics").remove([secondaryPath]);
     return { error: `Could not save song: ${updateErr.message}` };
   }
 

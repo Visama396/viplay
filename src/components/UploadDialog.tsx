@@ -17,6 +17,11 @@ export default function UploadDialog({ account, onClose, onUploaded }: UploadDia
   const [lyricsMode, setLyricsMode] = useState<"text" | "file">("text");
   const [lyricsText, setLyricsText] = useState("");
   const [lyrics, setLyrics] = useState<File | null>(null);
+  const [secondaryMode, setSecondaryMode] = useState<"text" | "file">("text");
+  const [secondaryLabel, setSecondaryLabel] = useState("Romanized");
+  const [secondaryText, setSecondaryText] = useState("");
+  const [secondaryFile, setSecondaryFile] = useState<File | null>(null);
+  const [showSecondary, setShowSecondary] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
@@ -38,6 +43,11 @@ export default function UploadDialog({ account, onClose, onUploaded }: UploadDia
       artwork: artwork || undefined,
       lyrics: lyricsMode === "file" ? lyrics || undefined : undefined,
       lyricsText: lyricsMode === "text" ? lyricsText || undefined : undefined,
+      secondaryLyrics:
+        showSecondary && secondaryMode === "file" ? secondaryFile || undefined : undefined,
+      secondaryLyricsText:
+        showSecondary && secondaryMode === "text" ? secondaryText || undefined : undefined,
+      secondaryLyricsLabel: showSecondary ? secondaryLabel || undefined : undefined,
       uploadedBy: account.id,
     });
 
@@ -182,6 +192,80 @@ export default function UploadDialog({ account, onClose, onUploaded }: UploadDia
                 onChange={(e) => setLyrics(e.target.files?.[0] ?? null)}
                 className={fileClass}
               />
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-zinc-800">
+          <button
+            type="button"
+            onClick={() => setShowSecondary((s) => !s)}
+            className="flex w-full items-center justify-between px-4 py-2.5 text-left text-xs text-zinc-400 transition hover:text-white"
+            aria-expanded={showSecondary}
+          >
+            <span>
+              Secondary lyrics{" "}
+              <span className="text-zinc-600">
+                (optional — e.g. romanized, transliteration)
+              </span>
+            </span>
+            <span className="text-lg leading-none">{showSecondary ? "−" : "+"}</span>
+          </button>
+          {showSecondary && (
+            <div className="space-y-3 border-t border-zinc-800 p-4">
+              <div>
+                <label className="mb-1 block text-xs text-zinc-400">
+                  Button label
+                </label>
+                <input
+                  type="text"
+                  value={secondaryLabel}
+                  onChange={(e) => setSecondaryLabel(e.target.value)}
+                  className={inputClass}
+                  maxLength={24}
+                  placeholder="Romanized"
+                />
+              </div>
+              <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setSecondaryMode("text")}
+                  className={`rounded-md px-3 py-1 transition ${
+                    secondaryMode === "text" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  Write
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSecondaryMode("file")}
+                  className={`rounded-md px-3 py-1 transition ${
+                    secondaryMode === "file" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  File
+                </button>
+              </div>
+              {secondaryMode === "text" ? (
+                <textarea
+                  value={secondaryText}
+                  onChange={(e) => setSecondaryText(e.target.value)}
+                  spellCheck={false}
+                  rows={5}
+                  placeholder={"[00:12.50]Romaji lyrics..."}
+                  className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 font-mono text-xs leading-relaxed text-zinc-100 placeholder-zinc-600 outline-none transition-colors focus:border-rose-500"
+                />
+              ) : (
+                <input
+                  type="file"
+                  accept=".lrc,.txt,text/plain"
+                  onChange={(e) => setSecondaryFile(e.target.files?.[0] ?? null)}
+                  className={fileClass}
+                />
+              )}
+              <p className="text-xs text-zinc-500">
+                Same LRC timestamps as the original, but in the alternate script.
+              </p>
             </div>
           )}
         </div>

@@ -29,6 +29,7 @@ export default function Player({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [lyrics, setLyrics] = useState<string | null>(null);
+  const [secondaryLyrics, setSecondaryLyrics] = useState<string | null>(null);
   const [volume, setVolume] = useState(1);
   const [loop, setLoop] = useState(false);
 
@@ -51,6 +52,7 @@ export default function Player({
     audio.src = getPublicUrl("audio", song.audio_path);
     setCurrentTime(0);
     setLyrics(null);
+    setSecondaryLyrics(null);
 
     audio
       .play()
@@ -69,19 +71,30 @@ export default function Player({
   }, [playing]);
 
   const loadLyrics = useCallback(async () => {
-    if (!song?.lyrics_path) {
+    if (!song?.lyrics_path && !song?.secondary_lyrics_path) {
       setLyrics(null);
+      setSecondaryLyrics(null);
       return;
     }
-    const { data, error } = await supabase.storage
-      .from("lyrics")
-      .download(song.lyrics_path);
-    if (error || !data) {
+    const [primary, secondary] = await Promise.all([
+      song?.lyrics_path
+        ? supabase.storage.from("lyrics").download(song.lyrics_path)
+        : null,
+      song?.secondary_lyrics_path
+        ? supabase.storage.from("lyrics").download(song.secondary_lyrics_path)
+        : null,
+    ]);
+    if (primary && !primary.error && primary.data) {
+      setLyrics(await primary.data.text());
+    } else {
       setLyrics(null);
-      return;
     }
-    setLyrics(await data.text());
-  }, [song?.lyrics_path]);
+    if (secondary && !secondary.error && secondary.data) {
+      setSecondaryLyrics(await secondary.data.text());
+    } else {
+      setSecondaryLyrics(null);
+    }
+  }, [song?.lyrics_path, song?.secondary_lyrics_path]);
 
   useEffect(() => {
     loadLyrics();
@@ -235,6 +248,8 @@ export default function Player({
             <div className="flex min-h-0 w-full min-w-0 max-w-4xl flex-1">
               <LyricsViewer
                 content={lyrics}
+                secondaryContent={secondaryLyrics}
+                secondaryLabel={song.secondary_lyrics_label}
                 currentTime={currentTime}
                 audioRef={audioRef}
                 onSeek={seek}

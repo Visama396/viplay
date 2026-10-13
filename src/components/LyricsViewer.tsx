@@ -3,6 +3,10 @@ import { getActiveLyrics, parseLrc } from "../lib/lrc";
 
 interface LyricsViewerProps {
   content: string | null;
+  /** Optional second LRC track (e.g. romanized lyrics). Shown via toggle. */
+  secondaryContent?: string | null;
+  /** Label for the secondary track toggle, e.g. "Romanized". */
+  secondaryLabel?: string | null;
   /** Coarse time from the player (seek bar). Used as fallback. */
   currentTime: number;
   /** When provided, the viewer reads time via rAF at 60fps for smooth karaoke. */
@@ -13,26 +17,39 @@ interface LyricsViewerProps {
 
 export default function LyricsViewer({
   content,
+  secondaryContent,
+  secondaryLabel,
   currentTime,
   audioRef,
   onSeek,
 }: LyricsViewerProps) {
+  const hasSecondary = Boolean(secondaryContent?.trim());
+  const [mode, setMode] = useState<"primary" | "secondary">("primary");
+  // Reset to the original track when the song (or either track) changes.
+  useEffect(() => {
+    setMode("primary");
+  }, [content, secondaryContent]);
+
+  const activeContent =
+    mode === "secondary" && hasSecondary ? secondaryContent ?? null : content;
+  const label = secondaryLabel?.trim() || "Romanized";
+
   const parsed = useMemo(() => {
-    if (!content) return null;
+    if (!activeContent) return null;
     try {
-      const p = parseLrc(content);
+      const p = parseLrc(activeContent);
       return p.lines.length > 0 ? p : null;
     } catch {
       return null;
     }
-  }, [content]);
+  }, [activeContent]);
 
   // Smooth clock: rAF reading the audio element directly. Falls back to the
   // coarse currentTime prop when no ref is available (or element unmounted).
   const [smoothTime, setSmoothTime] = useState(currentTime);
   useEffect(() => {
     setSmoothTime(currentTime);
-  }, [content]);
+  }, [activeContent]);
 
   useEffect(() => {
     const el = audioRef?.current;
@@ -53,7 +70,7 @@ export default function LyricsViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [audioRef, content]);
+  }, [audioRef, activeContent]);
 
   // Keep coarse prop in sync for seeks while paused (rAF still covers the
   // playing case, this covers unmounted/short-circuit cases).
@@ -89,13 +106,13 @@ export default function LyricsViewer({
     ro.observe(container);
     ro.observe(inner);
     return () => ro.disconnect();
-  }, [content]);
+  }, [activeContent]);
 
   // Reset follow mode and scroll position when the song/lyrics change.
   useEffect(() => {
     setFollowActive(true);
     containerRef.current?.scrollTo({ top: 0 });
-  }, [content]);
+  }, [activeContent]);
 
   useEffect(() => {
     if (active == null || !followActive) return;
@@ -122,7 +139,7 @@ export default function LyricsViewer({
     setFollowActive(false);
   };
 
-  if (!content) {
+  if (!activeContent) {
     return (
       <div className="flex h-full items-center justify-center text-zinc-500">
         No lyrics available
@@ -133,9 +150,16 @@ export default function LyricsViewer({
   if (!parsed || parsed.lines.length === 0) {
     return (
       <div className="flex min-h-0 w-full flex-1 flex-col px-6">
+        {hasSecondary && (
+          <LyricsToggle
+            mode={mode}
+            onChange={setMode}
+            secondaryLabel={label}
+          />
+        )}
         <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain py-4">
           <div className="whitespace-pre-wrap break-words text-zinc-300">
-            {content}
+            {activeContent}
           </div>
         </div>
       </div>
@@ -144,6 +168,9 @@ export default function LyricsViewer({
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col items-center px-4">
+      {hasSecondary && (
+        <LyricsToggle mode={mode} onChange={setMode} secondaryLabel={label} />
+      )}
       <div
         ref={containerRef}
         onScroll={handleManualScroll}
@@ -291,4 +318,39 @@ function secondsToTime(t: number): string {
   const m = Math.floor(t / 60);
   const s = Math.floor(t % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function LyricsToggle({
+  mode,
+  onChange,
+  secondaryLabel,
+}: {
+  mode: "primary" | "secondary";
+  onChange: (m: "primary" | "secondary") => void;
+  secondaryLabel: string;
+}) {
+  const btn = (active: boolean) =>
+    `rounded-full px-3 py-1 text-xs font-medium transition ${
+      active ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
+    }`;
+  return (
+    <div className="flex shrink-0 items-center gap-1 rounded-full bg-zinc-900 p-1">
+      <button
+        type="button"
+        onClick={() => onChange("primary")}
+        className={btn(mode === "primary")}
+        aria-pressed={mode === "primary"}
+      >
+        Original
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("secondary")}
+        className={btn(mode === "secondary")}
+        aria-pressed={mode === "secondary"}
+      >
+        {secondaryLabel}
+      </button>
+    </div>
+  );
 }

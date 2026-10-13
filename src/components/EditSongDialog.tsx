@@ -19,6 +19,11 @@ export default function EditSongDialog({ song, onClose, onSaved }: EditSongDialo
   const [lyricsText, setLyricsText] = useState("");
   const [lyricsFile, setLyricsFile] = useState<File | null>(null);
   const [lyricsLoaded, setLyricsLoaded] = useState(false);
+  const [secondaryMode, setSecondaryMode] = useState<LyricsMode>("text");
+  const [secondaryText, setSecondaryText] = useState("");
+  const [secondaryFile, setSecondaryFile] = useState<File | null>(null);
+  const [secondaryLabel, setSecondaryLabel] = useState("Romanized");
+  const [secondaryLoaded, setSecondaryLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -33,12 +38,23 @@ export default function EditSongDialog({ song, onClose, onSaved }: EditSongDialo
     } else {
       setLyricsLoaded(true);
     }
+    if (song.secondary_lyrics_path) {
+      fetchLyrics(song.secondary_lyrics_path).then((text) => {
+        if (cancelled) return;
+        setSecondaryText(text ?? "");
+        setSecondaryLoaded(true);
+      });
+    } else {
+      setSecondaryText("");
+      setSecondaryLoaded(true);
+    }
+    setSecondaryLabel(song.secondary_lyrics_label?.trim() || "Romanized");
     return () => {
       cancelled = true;
     };
-  }, [song.lyrics_path]);
+  }, [song.lyrics_path, song.secondary_lyrics_path, song.secondary_lyrics_label]);
 
-  const canSubmit = title.trim() && artist.trim() && lyricsLoaded;
+  const canSubmit = title.trim() && artist.trim() && lyricsLoaded && secondaryLoaded;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,6 +68,9 @@ export default function EditSongDialog({ song, onClose, onSaved }: EditSongDialo
       artwork: artwork || undefined,
       lyrics: lyricsMode === "file" ? lyricsFile || undefined : undefined,
       lyricsText: lyricsMode === "text" ? lyricsText : undefined,
+      secondaryLyrics: secondaryMode === "file" ? secondaryFile || undefined : undefined,
+      secondaryLyricsText: secondaryMode === "text" ? secondaryText : undefined,
+      secondaryLyricsLabel: secondaryLabel,
     });
 
     setSaving(false);
@@ -185,6 +204,76 @@ export default function EditSongDialog({ song, onClose, onSaved }: EditSongDialo
               />
               {song.lyrics_path && !lyricsFile && (
                 <p className="mt-1 text-xs text-zinc-500">Current lyrics will be kept.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <label className="block text-xs text-zinc-400">
+              Secondary lyrics{" "}
+              <span className="text-zinc-600">(romanized / transliteration)</span>
+            </label>
+            <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSecondaryMode("text")}
+                className={`rounded-md px-3 py-1 transition ${
+                  secondaryMode === "text" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => setSecondaryMode("file")}
+                className={`rounded-md px-3 py-1 transition ${
+                  secondaryMode === "file" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                File
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-2">
+            <label className="mb-1 block text-xs text-zinc-400">Button label</label>
+            <input
+              type="text"
+              value={secondaryLabel}
+              onChange={(e) => setSecondaryLabel(e.target.value)}
+              className={inputClass}
+              maxLength={24}
+              placeholder="Romanized"
+            />
+          </div>
+
+          {secondaryMode === "text" ? (
+            <div>
+              <textarea
+                value={secondaryText}
+                onChange={(e) => setSecondaryText(e.target.value)}
+                spellCheck={false}
+                rows={8}
+                placeholder={"[mm:ss.xx]Romaji line 1\n[mm:ss.xx]Romaji line 2"}
+                className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 font-mono text-xs leading-relaxed text-zinc-100 placeholder-zinc-600 outline-none transition-colors focus:border-rose-500"
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Same timestamps as the original, alternate script. Empty clears
+                secondary lyrics.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <input
+                type="file"
+                accept=".lrc,.txt,text/plain"
+                onChange={(e) => setSecondaryFile(e.target.files?.[0] ?? null)}
+                className={fileClass}
+              />
+              {song.secondary_lyrics_path && !secondaryFile && (
+                <p className="mt-1 text-xs text-zinc-500">Current secondary lyrics will be kept.</p>
               )}
             </div>
           )}

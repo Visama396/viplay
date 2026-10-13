@@ -42,6 +42,8 @@ create table if not exists public.songs (
   audio_path text not null,
   artwork_path text,
   lyrics_path text,
+  secondary_lyrics_path text,
+  secondary_lyrics_label text,
   uploaded_by uuid references public.accounts (id) on delete set null,
   created_at timestamptz not null default now()
 );
