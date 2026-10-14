@@ -1,17 +1,23 @@
 import { useState } from "react";
 import type { Account } from "../lib/auth";
+import type { Album, Artist } from "../lib/types";
 import { uploadSong } from "../lib/upload";
+import { MetadataFields, type MetadataValue } from "./MetadataFields";
 
 interface UploadDialogProps {
   account: Account;
+  artists: Artist[];
+  albums: Album[];
+  allGenres: string[];
   onClose: () => void;
   onUploaded: () => void;
 }
 
-export default function UploadDialog({ account, onClose, onUploaded }: UploadDialogProps) {
+const emptyMetadata: MetadataValue = { artist: "", album: "", year: "", genres: [] };
+
+export default function UploadDialog({ account, artists = [], albums = [], allGenres = [], onClose, onUploaded }: UploadDialogProps) {
   const [title, setTitle] = useState("");
-  const [artist, setArtist] = useState("");
-  const [album, setAlbum] = useState("");
+  const [meta, setMeta] = useState<MetadataValue>(emptyMetadata);
   const [audio, setAudio] = useState<File | null>(null);
   const [artwork, setArtwork] = useState<File | null>(null);
   const [lyricsMode, setLyricsMode] = useState<"text" | "file">("text");
@@ -26,7 +32,7 @@ export default function UploadDialog({ account, onClose, onUploaded }: UploadDia
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
 
-  const canSubmit = title.trim() && artist.trim() && audio;
+  const canSubmit = title.trim() && meta.artist.trim() && audio;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,10 +41,14 @@ export default function UploadDialog({ account, onClose, onUploaded }: UploadDia
     setError("");
     setProgress("Uploading files...");
 
+    const parsedYear = parseInt(meta.year, 10);
+
     const result = await uploadSong({
       title,
-      artist,
-      album,
+      artist: meta.artist,
+      album: meta.album,
+      year: Number.isFinite(parsedYear) ? parsedYear : null,
+      genres: meta.genres,
       audio,
       artwork: artwork || undefined,
       lyrics: lyricsMode === "file" ? lyrics || undefined : undefined,
@@ -83,44 +93,27 @@ export default function UploadDialog({ account, onClose, onUploaded }: UploadDia
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs text-zinc-400">Title *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={inputClass}
-              required
-              maxLength={120}
-              placeholder="Song title"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-zinc-400">Artist *</label>
-            <input
-              type="text"
-              value={artist}
-              onChange={(e) => setArtist(e.target.value)}
-              className={inputClass}
-              required
-              maxLength={120}
-              placeholder="Artist name"
-            />
-          </div>
-        </div>
-
         <div>
-          <label className="mb-1 block text-xs text-zinc-400">Album</label>
+          <label className="mb-1 block text-xs text-zinc-400">Title *</label>
           <input
             type="text"
-            value={album}
-            onChange={(e) => setAlbum(e.target.value)}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             className={inputClass}
+            required
             maxLength={120}
-            placeholder="Album (optional)"
+            placeholder="Song title"
           />
         </div>
+
+        <MetadataFields
+          artists={artists}
+          albums={albums}
+          allGenres={allGenres}
+          value={meta}
+          onChange={setMeta}
+          inputClass={inputClass}
+        />
 
         <div>
           <label className="mb-1 block text-xs text-zinc-400">Audio file *</label>

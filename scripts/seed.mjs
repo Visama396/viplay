@@ -153,6 +153,87 @@ for (const folder of folders) {
     continue;
   }
   console.log(`  inserted song "${data.title}" (${data.id})`);
+
+  // Link into the catalog tables (artists/albums/genres). Best-effort, so
+  // seeding keeps working if migration 0011 hasn't been applied yet.
+  // meta.json may set: genre ("Rock") or genres (["Rock", "Pop"]),
+  // album_year (or year) for the album.
+  try {
+    const artistName = String(meta.artist || "Unknown Artist").trim();
+    const { data: knownArtists } = await supabase.from("artists").select("id, name");
+    let artistRow = (knownArtists ?? []).find(
+      (a) => a.name.trim().toLowerCase() === artistName.toLowerCase(),
+    );
+    if (!artistRow) {
+      const { data: created } = await supabase
+        .from("artists")
+        .insert({ name: artistName })
+        .select("id, name")
+        .single();
+      artistRow = created;
+    }
+
+    let albumId = null;
+    const albumTitle = meta.album ? String(meta.album).trim() : "";
+    if (albumTitle && artistRow) {
+      const albumYear = meta.album_year ?? meta.year ?? null;
+      const { data: knownAlbums } = await supabase
+        .from("albums")
+        .select("id, title")
+        .eq("artist_id", artistRow.id);
+      let albumRow = (knownAlbums ?? []).find(
+        (a) => a.title.trim().toLowerCase() === albumTitle.toLowerCase(),
+      );
+      if (!albumRow) {
+        const { data: created } = await supabase
+          .from("albums")
+          .insert({ title: albumTitle, artist_id: artistRow.id, year: albumYear })
+          .select("id, title")
+          .single();
+        albumRow = created;
+      }
+      albumId = albumRow?.id ?? null;
+    }
+
+    await supabase
+      .from("songs")
+      .update({ artist_id: artistRow?.id ?? null, album_id: albumId })
+      .eq("id", data.id);
+
+    const genreNames = [
+      ...(Array.isArray(meta.genres) ? meta.genres : []),
+      ...(meta.genre ? [meta.genre] : []),
+    ]
+      .map((g) => String(g).trim())
+      .filter(Boolean);
+    if (genreNames.length > 0) {
+      const { data: knownGenres } = await supabase.from("genres").select("id, name");
+      const genreIds = [];
+      for (const name of genreNames) {
+        let row = (knownGenres ?? []).find(
+          (g) => g.name.trim().toLowerCase() === name.toLowerCase(),
+        );
+        if (!row) {
+          const { data: created } = await supabase
+            .from("genres")
+            .insert({ name })
+            .select("id, name")
+            .single();
+          row = created;
+          if (row) knownGenres.push(row);
+        }
+        if (row) genreIds.push(row.id);
+      }
+      if (genreIds.length > 0) {
+        await supabase
+          .from("song_genres")
+          .insert(genreIds.map((genre_id) => ({ song_id: data.id, genre_id })));
+      }
+    }
+  } catch (e) {
+    console.warn(`  catalog link skipped: ${e.message}`);
+  }
+
   inserted++;
 }
 

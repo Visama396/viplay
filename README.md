@@ -8,6 +8,10 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 ## Features
 
 - Browse songs and playlists
+- Home sections: Recently listened, Last Added, Songs by artist, All songs
+- Search across title, artist, album, and genre; genre filter chips; artist filter
+- Artist / album autocomplete comboboxes when uploading or editing (existing
+  entries are reused, new ones are created inline), plus album year and genres
 - Play / pause, previous / next, and seek
 - Queue management (play a single song within all songs, or a whole playlist)
 - Karaoke-style synced lyrics (LRC format, line-level and word-level
@@ -35,6 +39,7 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 │   ├── supabase.ts       # Supabase client + public URL helpers
 │   ├── auth.ts           # Supabase Auth (username + fake email), account link
 │   ├── upload.ts         # in-app song/file upload (client-side)
+│   ├── catalog.ts        # artists/albums/genres fetch + ensure, recent plays
 │   ├── playlists.ts      # playlist CRUD, copy, add/remove songs
 │   ├── types.ts          # Song / Playlist types
 │   └── lrc.ts            # LRC parser + karaoke sync helpers
@@ -44,6 +49,9 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
     │   ├── UploadDialog.tsx  # in-app song upload form (logged-in users)
     │   ├── PlaylistDialog.tsx # create / edit playlist (logged-in users)
     │   ├── Home.tsx          # browse songs & playlists
+    │   ├── MetadataFields.tsx  # artist/album/year/genre inputs (upload + edit)
+    │   ├── ui/combobox.tsx     # autocomplete combobox (cmdk-powered)
+    │   ├── ui/skeleton.tsx     # skeleton placeholder
     │   ├── Player.tsx        # audio element + controls
     │   └── LyricsViewer.tsx  # synced karaoke lyrics
     ├── layouts/
@@ -55,7 +63,8 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 
 ### 1. Database
 
-Run `supabase/migrations/0001_init.sql` in your Supabase SQL editor. This creates:
+Run the files in `supabase/migrations/` **in order** in your Supabase SQL
+editor (`0001_init.sql`, then `0002`–`0011`). The early migrations create:
 
 - `accounts`, `songs`, `playlists`, and `playlist_songs` tables
 - RLS policies (everything publicly readable except private playlists, which
@@ -64,6 +73,12 @@ Run `supabase/migrations/0001_init.sql` in your Supabase SQL editor. This create
 - `ensure_account_link` and `delete_song` RPCs
 - `audio`, `artwork`, and `lyrics` public storage buckets (uploads, lyric/artwork
   edits, and old-file cleanup allowed from the app)
+
+Migration `0011_catalog.sql` adds the catalog: `artists`, `albums`
+(with optional year), `genres` + `song_genres` (many-to-many), and
+`songs.artist_id` / `songs.album_id` links backfilled from the existing
+text columns. The app works without it (free-text fallback), but the
+autocomplete, grouping, and genre features need it.
 
 > Existing accounts link to Supabase Auth on first login via the fake-email
 > trick. No email is required from the user.
@@ -81,7 +96,8 @@ PUBLIC_SUPABASE_ANON_KEY=<anon key>
 
 Place files under `seed-assets/<song-folder>/` with an audio file, optional
 artwork, and an optional `.lrc` lyrics file. An optional `meta.json` may set
-`title`, `artist`, `album`, and `duration`:
+`title`, `artist`, `album`, `album_year` (or `year`), `genre` (or `genres`
+array), and `duration`:
 
 ```text
 seed-assets/

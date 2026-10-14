@@ -1,12 +1,17 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { getPublicUrl } from "../lib/supabase";
 import type { Account } from "../lib/auth";
-import type { PlaylistWithSongs, Song } from "../lib/types";
+import type { Artist, PlaylistWithSongs, Song } from "../lib/types";
 import { isPlaylistOwner } from "../lib/playlists";
+import { Skeleton } from "./ui/skeleton";
 
 export interface HomeProps {
   songs: Song[];
   playlists: PlaylistWithSongs[];
+  artists: Artist[];
+  allGenres: string[];
+  recentIds: string[];
+  loading?: boolean;
   currentId: string | null;
   onPlay: (songs: Song[]) => void;
   account: Account | null;
@@ -25,6 +30,10 @@ export interface HomeProps {
 export default function Home({
   songs,
   playlists,
+  artists = [],
+  allGenres = [],
+  recentIds = [],
+  loading = false,
   currentId,
   onPlay,
   account,
@@ -41,13 +50,60 @@ export default function Home({
 }: HomeProps) {
   const [query, setQuery] = useState("");
   const [addMenuSongId, setAddMenuSongId] = useState<string | null>(null);
+  const [genre, setGenre] = useState<string | null>(null);
+  const [artistKey, setArtistKey] = useState<string | null>(null);
 
-  const filtered = songs.filter(
-    (s) =>
-      !query ||
-      s.title.toLowerCase().includes(query.toLowerCase()) ||
-      s.artist.toLowerCase().includes(query.toLowerCase()),
-  );
+  const songArtistKey = (s: Song) =>
+    s.artist_id ? `id:${s.artist_id}` : `text:${s.artist.trim().toLowerCase()}`;
+
+  // Unified artist list: catalog artists plus any free-text artist on songs
+  // without a catalog row yet (e.g. before the 0011 migration is run).
+  const artistEntries = (() => {
+    const counts = new Map<string, { name: string; count: number }>();
+    for (const s of songs) {
+      const key = songArtistKey(s);
+      const entry = counts.get(key) ?? { name: s.artist, count: 0 };
+      entry.count += 1;
+      if (s.artist_id) {
+        entry.name = artists.find((a) => a.id === s.artist_id)?.name ?? s.artist;
+      }
+      counts.set(key, entry);
+    }
+    return [...counts.entries()]
+      .map(([key, v]) => ({ key, ...v }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  })();
+
+  const activeArtist = artistEntries.find((a) => a.key === artistKey) ?? null;
+
+  const filtered = songs.filter((s) => {
+    if (
+      genre &&
+      !(s.genres ?? []).some((g) => g.toLowerCase() === genre.toLowerCase())
+    ) {
+      return false;
+    }
+    if (artistKey && songArtistKey(s) !== artistKey) return false;
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (
+      s.title.toLowerCase().includes(q) ||
+      s.artist.toLowerCase().includes(q) ||
+      (s.album ?? "").toLowerCase().includes(q) ||
+      (s.genres ?? []).some((g) => g.toLowerCase().includes(q))
+    );
+  });
+
+  const isBrowsing = !query && !genre && !artistKey;
+
+  const lastAdded = [...songs]
+    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+    .slice(0, 10);
+
+  const songById = new Map(songs.map((s) => [s.id, s]));
+  const recentSongs = recentIds
+    .map((id) => songById.get(id))
+    .filter((s): s is Song => Boolean(s));
 
   const myPlaylists = playlists.filter((pl) => isPlaylistOwner(pl, account));
 
@@ -68,7 +124,20 @@ export default function Home({
           </button>
         </div>
         <div className="space-y-1">
-          {playlists.map((pl) => {
+          {loading ? (
+            <div className="space-y-1" aria-label="Loading playlists">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center justify-between px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="mt-1.5 h-3 w-1/2" />
+                  </div>
+                  <Skeleton className="ml-2 h-4 w-4 shrink-0" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            playlists.map((pl) => {
             const owner = isPlaylistOwner(pl, account);
             return (
               <div
@@ -124,8 +193,9 @@ export default function Home({
                 )}
               </div>
             );
-          })}
-          {playlists.length === 0 && (
+          })
+          )}
+          {!loading && playlists.length === 0 && (
             <p className="px-3 text-sm text-zinc-600">No playlists yet</p>
           )}
         </div>
@@ -191,7 +261,13 @@ export default function Home({
               + New
             </button>
           </div>
-          {playlists.length === 0 ? (
+          {loading ? (
+            <div className="flex gap-2 overflow-x-auto pb-2" aria-label="Loading playlists">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 w-28 shrink-0 rounded-full" />
+              ))}
+            </div>
+          ) : playlists.length === 0 ? (
             <p className="py-2 text-sm text-zinc-600">No playlists yet</p>
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-2">
@@ -248,9 +324,125 @@ export default function Home({
           )}
         </div>
 
+        {(allGenres.length > 0 || activeArtist) && (
+          <div className="px-6 pb-3">
+            {activeArtist && (
+              <div className="mb-2 flex items-center gap-2">
+                <span className="flex items-center gap-1.5 rounded-full bg-rose-500/15 py-1 pl-3 pr-1.5 text-xs font-medium text-rose-300">
+                  {activeArtist.name}
+                  <button
+                    onClick={() => setArtistKey(null)}
+                    className="rounded-full p-0.5 text-rose-300/70 transition hover:text-white"
+                    aria-label="Clear artist filter"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </span>
+                <span className="text-[11px] text-zinc-500">
+                  {filtered.length} song{filtered.length === 1 ? "" : "s"}
+                </span>
+              </div>
+            )}
+            {allGenres.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setGenre(null)}
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
+                    genre === null
+                      ? "bg-rose-500 text-white"
+                      : "border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"
+                  }`}
+                >
+                  All
+                </button>
+                {allGenres.map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setGenre(genre === g ? null : g)}
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
+                      genre === g
+                        ? "bg-rose-500 text-white"
+                        : "border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="px-6 pb-6">
+          {isBrowsing && !loading && recentSongs.length > 0 && (
+            <Section title="Recently listened">
+              {recentSongs.map((song) => (
+                <RailCard key={song.id} song={song} onPlay={onPlay} />
+              ))}
+            </Section>
+          )}
+          {isBrowsing && !loading && lastAdded.length > 0 && (
+            <Section title="Last Added">
+              {lastAdded.map((song) => (
+                <RailCard key={song.id} song={song} onPlay={onPlay} />
+              ))}
+            </Section>
+          )}
+          {isBrowsing && !loading && artistEntries.length > 0 && (
+            <div className="mb-6">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+                Songs by artist
+              </h2>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {artistEntries.slice(0, 12).map((a) => (
+                  <button
+                    key={a.key}
+                    onClick={() => setArtistKey(a.key)}
+                    className="flex shrink-0 items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900 py-2 pl-2 pr-4 text-left transition hover:border-zinc-600 hover:bg-zinc-800"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-500/20 text-sm font-bold text-rose-300">
+                      {a.name.trim().charAt(0).toUpperCase() || "?"}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block max-w-32 truncate text-sm font-medium text-zinc-100">
+                        {a.name}
+                      </span>
+                      <span className="block text-[11px] text-zinc-500">
+                        {a.count} song{a.count === 1 ? "" : "s"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {isBrowsing && !loading && (
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+              All songs
+            </h2>
+          )}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {filtered.map((song) => {
+            {loading
+              ? Array.from({ length: 8 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="overflow-hidden rounded-xl bg-zinc-900 p-3"
+                    aria-label="Loading song"
+                  >
+                    <Skeleton className="aspect-square w-full rounded-lg" />
+                    <div className="mt-3">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="mt-1.5 h-3 w-1/2" />
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                      <Skeleton className="h-6 w-8 rounded-full" />
+                    </div>
+                  </div>
+                ))
+              : filtered.map((song) => {
               const isCurrent = song.id === currentId;
               const isAdmin = account?.username === "visama396";
               const isOwner = account != null && song.uploaded_by === account.id;
@@ -388,7 +580,7 @@ export default function Home({
                 </div>
               );
             })}
-            {filtered.length === 0 && (
+            {!loading && filtered.length === 0 && (
               <p className="col-span-full py-16 text-center text-zinc-500">
                 No songs found
               </p>
@@ -396,6 +588,48 @@ export default function Home({
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="mb-6">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+        {title}
+      </h2>
+      <div className="flex gap-4 overflow-x-auto pb-2">{children}</div>
+    </div>
+  );
+}
+
+function RailCard({ song, onPlay }: { song: Song; onPlay: (songs: Song[]) => void }) {
+  return (
+    <div
+      onClick={() => onPlay([song])}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onPlay([song]);
+      }}
+      role="button"
+      tabIndex={0}
+      className="w-36 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-zinc-900 p-3 transition hover:bg-zinc-800 sm:w-44"
+    >
+      {song.artwork_path ? (
+        <img
+          src={getPublicUrl("artwork", song.artwork_path)}
+          alt={`${song.title} artwork`}
+          className="aspect-square w-full rounded-lg object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-zinc-800 text-2xl font-bold text-zinc-600">
+          {song.title.trim().charAt(0).toUpperCase() || "♪"}
+        </div>
+      )}
+      <div className="mt-2 truncate text-sm font-semibold text-zinc-100">
+        {song.title}
+      </div>
+      <div className="truncate text-xs text-zinc-400">{song.artist}</div>
     </div>
   );
 }

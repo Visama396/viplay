@@ -1,19 +1,30 @@
 import { useEffect, useState } from "react";
 import { fetchLyrics, updateSong } from "../lib/upload";
-import type { Song } from "../lib/types";
+import type { Album, Artist, Song } from "../lib/types";
+import { MetadataFields, type MetadataValue } from "./MetadataFields";
 
 interface EditSongDialogProps {
   song: Song;
+  artists: Artist[];
+  albums: Album[];
+  allGenres: string[];
   onClose: () => void;
   onSaved: () => void;
 }
 
 type LyricsMode = "text" | "file";
 
-export default function EditSongDialog({ song, onClose, onSaved }: EditSongDialogProps) {
+export default function EditSongDialog({ song, artists = [], albums = [], allGenres = [], onClose, onSaved }: EditSongDialogProps) {
   const [title, setTitle] = useState(song.title);
-  const [artist, setArtist] = useState(song.artist);
-  const [album, setAlbum] = useState(song.album ?? "");
+  const [meta, setMeta] = useState<MetadataValue>({
+    artist: song.artist,
+    album: song.album ?? "",
+    year:
+      song.album_id != null
+        ? (albums.find((a) => a.id === song.album_id)?.year?.toString() ?? "")
+        : "",
+    genres: song.genres ?? [],
+  });
   const [artwork, setArtwork] = useState<File | null>(null);
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>("text");
   const [lyricsText, setLyricsText] = useState("");
@@ -54,17 +65,21 @@ export default function EditSongDialog({ song, onClose, onSaved }: EditSongDialo
     };
   }, [song.lyrics_path, song.secondary_lyrics_path, song.secondary_lyrics_label]);
 
-  const canSubmit = title.trim() && artist.trim() && lyricsLoaded && secondaryLoaded;
+  const canSubmit = title.trim() && meta.artist.trim() && lyricsLoaded && secondaryLoaded;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError("");
 
+    const parsedYear = parseInt(meta.year, 10);
+
     const result = await updateSong(song.id, {
       title,
-      artist,
-      album,
+      artist: meta.artist,
+      album: meta.album,
+      year: meta.year.trim() === "" ? null : Number.isFinite(parsedYear) ? parsedYear : null,
+      genres: meta.genres,
       artwork: artwork || undefined,
       lyrics: lyricsMode === "file" ? lyricsFile || undefined : undefined,
       lyricsText: lyricsMode === "text" ? lyricsText : undefined,
@@ -105,41 +120,26 @@ export default function EditSongDialog({ song, onClose, onSaved }: EditSongDialo
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs text-zinc-400">Title *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className={inputClass}
-              required
-              maxLength={120}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-zinc-400">Artist *</label>
-            <input
-              type="text"
-              value={artist}
-              onChange={(e) => setArtist(e.target.value)}
-              className={inputClass}
-              required
-              maxLength={120}
-            />
-          </div>
-        </div>
-
         <div>
-          <label className="mb-1 block text-xs text-zinc-400">Album</label>
+          <label className="mb-1 block text-xs text-zinc-400">Title *</label>
           <input
             type="text"
-            value={album}
-            onChange={(e) => setAlbum(e.target.value)}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             className={inputClass}
+            required
             maxLength={120}
           />
         </div>
+
+        <MetadataFields
+          artists={artists}
+          albums={albums}
+          allGenres={allGenres}
+          value={meta}
+          onChange={setMeta}
+          inputClass={inputClass}
+        />
 
         <div>
           <label className="mb-1 block text-xs text-zinc-400">Artwork (replace)</label>

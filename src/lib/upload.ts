@@ -1,10 +1,15 @@
 import { supabase } from "./supabase";
+import { ensureAlbum, ensureArtist, setSongGenres } from "./catalog";
 import type { Song } from "./types";
 
 export interface UploadInput {
   title: string;
   artist: string;
   album?: string;
+  /** Release year for the album (creates/updates the album row). */
+  year?: number | null;
+  /** Genre names to link (created if new). */
+  genres?: string[];
   audio: File;
   artwork?: File;
   lyrics?: File;
@@ -152,12 +157,25 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
 
   const duration = await readAudioDuration(input.audio);
 
+  // Link the song into the catalog (best-effort: a missing 0011 migration
+  // just leaves the FKs null, the text columns still save).
+  const artistId = await ensureArtist(artist);
+  const albumTitle = input.album?.trim() || "";
+  const albumId =
+    albumTitle && artistId
+      ? await ensureAlbum(albumTitle, artistId, input.year ?? null)
+      : null;
+
   const { data, error } = await supabase
     .from("songs")
     .insert({
       title,
       artist,
       album: input.album?.trim() || null,
+      // FKs only when resolved: if the 0011 migration hasn't been run,
+      // PostgREST rejects unknown columns and the whole insert would fail.
+      ...(artistId ? { artist_id: artistId } : {}),
+      ...(albumId ? { album_id: albumId } : {}),
       duration,
       audio_path: audioPath,
       artwork_path: artworkPath,
@@ -177,6 +195,10 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
     return { error: `Could not save song: ${error.message}` };
   }
 
+  if (data && input.genres && input.genres.length > 0) {
+    await setSongGenres((data as Song).id, input.genres);
+  }
+
   return { song: data as Song };
 }
 
@@ -184,6 +206,10 @@ export interface EditInput {
   title: string;
   artist: string;
   album?: string;
+  /** Release year for the album. Undefined leaves it unchanged. */
+  year?: number | null;
+  /** Genre names to set. Null/undefined leaves them unchanged. */
+  genres?: string[] | null;
   artwork?: File;
   lyrics?: File;
   /** Inline LRC text. Empty string clears lyrics; null/undefined leaves them unchanged. */
@@ -366,12 +392,30 @@ export async function updateSong(
     else secondaryLabel = null;
   }
 
+  // Keep the catalog links in sync with the edited names (best-effort).
+  const artistId = await ensureArtist(artist);
+  const albumTitle = input.album?.trim() || "";
+  const albumId =
+    albumTitle && artistId
+      ? await ensureAlbum(albumTitle, artistId, input.year ?? null)
+      : null;
+  if (albumId && input.year !== undefined) {
+    try {
+      await supabase.from("albums").update({ year: input.year ?? null }).eq("id", albumId);
+    } catch {
+      // Non-fatal: the song row update below is what matters.
+    }
+  }
+
   const { error: updateErr } = await supabase
     .from("songs")
     .update({
       title,
       artist,
       album: input.album?.trim() || null,
+      // Same unknown-column rule as the insert above.
+      ...(artistId ? { artist_id: artistId } : {}),
+      ...(albumId ? { album_id: albumId } : {}),
       artwork_path: artworkPath,
       lyrics_path: lyricsPath,
       secondary_lyrics_path: secondaryPath,
@@ -386,10 +430,13 @@ export async function updateSong(
     return { error: `Could not save song: ${updateErr.message}` };
   }
 
+  if (input.genres != null) {
+    await setSongGenres(songId, input.genres);
+  }
+
   // Row now points at the new objects (or no lyrics); old ones are garbage.
   // Best-effort: a cleanup failure must not fail the save.
-  for (const r of replacedArtwork) {
-    const { error } = await supabase.storage.from(r.bucket).remove([r.oldPath]);
+  for (const r of replacedArtwork) {    const { error } = await supabase.storage.from(r.bucket).remove([r.oldPath]);
     if (error) console.warn(`Could not delete old artwork ${r.oldPath}: ${error.message}`);
   }
   for (const r of replacedLyrics) {

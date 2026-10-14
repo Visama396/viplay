@@ -8,14 +8,19 @@ import ChangePasswordDialog from "./ChangePasswordDialog";
 import EditSongDialog from "./EditSongDialog";
 import { supabase } from "../lib/supabase";
 import { deleteSong } from "../lib/upload";
+import { fetchCatalog, getRecentPlays, recordPlay } from "../lib/catalog";
 import { addSongToPlaylist, copyPlaylist, isPlaylistOwner } from "../lib/playlists";
 import type { Account } from "../lib/auth";
 import { getCurrentAccount, logout } from "../lib/auth";
-import type { Playlist, PlaylistSong, PlaylistWithSongs, Song } from "../lib/types";
+import type { Album, Artist, Playlist, PlaylistSong, PlaylistWithSongs, Song } from "../lib/types";
 
 export default function App() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistWithSongs[]>([]);
+  const [artists, setArtists] = useState<Artist[]>([]);
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [allGenres, setAllGenres] = useState<string[]>([]);
+  const [recentIds, setRecentIds] = useState<string[]>(() => getRecentPlays().map((p) => p.id));
   const [loading, setLoading] = useState(true);
   const [queue, setQueue] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -31,6 +36,14 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const currentSong = queue[currentIndex];
+
+  // Track listening history (per-device) for the "Recently listened" section.
+  useEffect(() => {
+    if (currentSong) {
+      setRecentIds(recordPlay(currentSong.id).map((p) => p.id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSong?.id]);
 
   // Restore any existing Supabase Auth session on load.
   useEffect(() => {
@@ -132,9 +145,10 @@ export default function App() {
 
     async function load() {
       try {
-        const [songsRes, playlistsRes] = await Promise.all([
+        const [songsRes, playlistsRes, catalog] = await Promise.all([
           supabase.from("songs").select("*").order("created_at"),
           supabase.from("playlists").select("*").order("created_at"),
+          fetchCatalog(),
         ]);
 
         if (cancelled) return;
@@ -161,8 +175,17 @@ export default function App() {
           }),
         );
 
-        setSongs(songsRes.data ?? []);
         setPlaylists(enriched);
+        setArtists(catalog.artists);
+        setAlbums(catalog.albums);
+        setAllGenres(catalog.genres.map((g) => g.name));
+        if (cancelled) return;
+        setSongs(
+          (songsRes.data ?? []).map((s: Song) => ({
+            ...s,
+            genres: catalog.songGenres.get(s.id) ?? [],
+          })),
+        );
       } catch (err) {
         console.error("Failed to load data", err);
       } finally {
@@ -211,14 +234,6 @@ export default function App() {
     setCurrentIndex((i) => i + 1);
   }, [currentIndex, queue.length]);
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center text-zinc-400">
-        Loading ViPlay...
-      </div>
-    );
-  }
-
   const playerOpen = view === "player" && queue.length > 0 && currentIndex >= 0;
 
   return (
@@ -228,6 +243,10 @@ export default function App() {
           <Home
             songs={songs}
             playlists={playlists}
+            artists={artists}
+            allGenres={allGenres}
+            recentIds={recentIds}
+            loading={loading}
             currentId={currentSong?.id ?? null}
             onPlay={handlePlay}
             account={account}
@@ -274,6 +293,9 @@ export default function App() {
           <div className="my-auto w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <UploadDialog
               account={account}
+              artists={artists}
+              albums={albums}
+              allGenres={allGenres}
               onClose={closeUpload}
               onUploaded={afterUpload}
             />
@@ -320,6 +342,9 @@ export default function App() {
           <div className="my-auto w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
             <EditSongDialog
               song={editSong}
+              artists={artists}
+              albums={albums}
+              allGenres={allGenres}
               onClose={closeEdit}
               onSaved={afterEdit}
             />

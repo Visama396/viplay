@@ -3,6 +3,10 @@ export interface Song {
   title: string;
   artist: string;
   album: string | null;
+  artist_id: string | null;
+  album_id: string | null;
+  /** Genre names, attached client-side from song_genres. */
+  genres?: string[];
   duration: number | null;
   audio_path: string;
   artwork_path: string | null;
@@ -34,4 +38,24 @@ export interface PlaylistSong {
 
 export interface PlaylistWithSongs extends Playlist {
   songs: Song[];
+}
+
+export interface Artist {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Album {
+  id: string;
+  title: string;
+  artist_id: string | null;
+  year: number | null;
+  created_at: string;
+}
+
+export interface Genre {
+  id: string;
+  name: string;
+  created_at: string;
 }
