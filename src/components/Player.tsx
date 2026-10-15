@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getPublicUrl, supabase } from "../lib/supabase";
+import type { Account } from "../lib/auth";
 import type { Song } from "../lib/types";
 import LyricsViewer from "./LyricsViewer";
 
@@ -12,6 +13,9 @@ interface PlayerProps {
   onBack: () => void;
   onExpand: () => void;
   compact: boolean;
+  account: Account | null;
+  onEdit: (song: Song) => void;
+  onDelete: (songId: string) => void;
 }
 
 export default function Player({
@@ -23,6 +27,9 @@ export default function Player({
   onBack,
   onExpand,
   compact,
+  account,
+  onEdit,
+  onDelete,
 }: PlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -114,6 +121,22 @@ export default function Player({
   };
 
   const toggle = () => setPlaying((p) => !p);
+
+  const progress =
+    duration > 0 && Number.isFinite(duration)
+      ? Math.min(100, Math.max(0, (currentTime / duration) * 100))
+      : 0;
+
+  const seekFromBar = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = audioRef.current;
+    if (!el || !(duration > 0)) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+    const t = ratio * duration;
+    el.currentTime = t;
+    setCurrentTime(t);
+  };
 
   // Expose the current track to the OS (iPhone lock screen / notification
   // panel). Without this, iOS falls back to the page title ("Viplay") and
@@ -207,6 +230,13 @@ export default function Player({
 
   if (!song) return null;
 
+  // Same permissions as the browse song cards: owners can edit, admins can
+  // edit and delete. Rendered as always-visible buttons (not hover-only) so
+  // touch users can reach them.
+  const isAdmin = account?.username === "visama396";
+  const isOwner = account != null && song.uploaded_by === account.id;
+  const canEdit = Boolean(isAdmin || isOwner);
+
   const playIcon = playing ? (
     <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
       <path d="M6 5h4v14H6zm8 0h4v14h-4z" />
@@ -235,7 +265,7 @@ export default function Player({
     );
 
   return (
-    <div className={compact ? "flex w-full flex-col" : "flex h-full min-h-0 flex-1 flex-col"}>
+    <div className={compact ? "flex w-full flex-col" : "flex min-h-0 flex-1 flex-col"}>
       <audio
         ref={audioRef}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
@@ -244,7 +274,22 @@ export default function Player({
       />
 
       {compact ? (
-        <div className="flex items-center gap-3 border-t border-zinc-800 bg-zinc-900 px-4 py-3">
+        <div className="w-full">
+          <div
+            className="relative h-1 w-full cursor-pointer bg-zinc-800"
+            onClick={seekFromBar}
+            role="progressbar"
+            aria-label="Seek"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration || 0)}
+            aria-valuenow={Math.round(currentTime)}
+          >
+            <div
+              className="absolute inset-y-0 left-0 bg-rose-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex items-center gap-3 bg-zinc-900 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
           {song.artwork_path && (
             <button
               onClick={onExpand}
@@ -267,6 +312,9 @@ export default function Player({
               {song.title}
             </div>
             <div className="truncate text-xs text-zinc-400">{song.artist}</div>
+            <div className="truncate text-[11px] tabular-nums text-zinc-500">
+              {format(currentTime)} / {format(duration)}
+            </div>
           </button>
           <button
             onClick={onPrev}
@@ -315,10 +363,11 @@ export default function Player({
               aria-label="Volume"
             />
           </div>
+          </div>
         </div>
       ) : (
         <>
-          <div className="flex shrink-0 items-center gap-3 border-b border-zinc-800 px-6 py-3">
+          <div className="flex shrink-0 items-center gap-3 border-b border-zinc-800 px-4 py-3 sm:px-6">
             <button
               onClick={onBack}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
@@ -329,9 +378,32 @@ export default function Player({
               </svg>
               Browse
             </button>
-            <div className="min-w-0 flex-1 truncate text-center text-sm text-zinc-400">
-              Now playing
-            </div>
+            {canEdit && (
+              <button
+                onClick={() => onEdit(song)}
+                className="ml-auto flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+                aria-label={`Edit ${song.title}`}
+                title="Edit song"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Edit
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                onClick={() => onDelete(song.id)}
+                className={`flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-red-500 hover:bg-red-600 hover:text-white ${canEdit ? "" : "ml-auto"}`}
+                aria-label={`Delete ${song.title}`}
+                title="Delete song"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18M8 6V4h8v2m1 0v14a2 2 0 01-2 2H9a2 2 0 01-2-2V6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Delete
+              </button>
+            )}
           </div>
 
           <div className="flex min-h-0 flex-1 items-stretch justify-center gap-8 overflow-hidden px-4">
@@ -360,7 +432,7 @@ export default function Player({
             </div>
           </div>
 
-          <div className="shrink-0 border-t border-zinc-800 px-6 py-4">
+          <div className="shrink-0 border-t border-zinc-800 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
             <div className="mx-auto flex max-w-2xl flex-col gap-2">
               <input
                 type="range"
@@ -376,7 +448,7 @@ export default function Player({
                 <span>{format(currentTime)}</span>
                 <span>{format(duration)}</span>
               </div>
-              <div className="flex items-center justify-center gap-6">
+              <div className="flex items-center justify-center gap-5 sm:gap-6">
                 <button
                   onClick={() => setLoop((l) => !l)}
                   className={`transition ${
@@ -411,7 +483,7 @@ export default function Player({
                     <path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" />
                   </svg>
                 </button>
-                <div className="ml-2 flex w-40 items-center gap-2">
+                <div className="ml-2 hidden w-40 items-center gap-2 sm:flex">
                   <span className={volume === 0 ? "text-zinc-500" : "text-zinc-300"}>
                     {volumeIcon}
                   </span>

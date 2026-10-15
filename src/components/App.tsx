@@ -4,7 +4,7 @@ import Player from "./Player";
 import AuthScreen from "./AuthScreen";
 import UploadDialog from "./UploadDialog";
 import PlaylistDialog from "./PlaylistDialog";
-import ChangePasswordDialog from "./ChangePasswordDialog";
+import AccountDialog from "./AccountDialog";
 import EditSongDialog from "./EditSongDialog";
 import { supabase } from "../lib/supabase";
 import { deleteSong } from "../lib/upload";
@@ -27,7 +27,7 @@ export default function App() {
   const [account, setAccount] = useState<Account | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [editSong, setEditSong] = useState<Song | null>(null);
   const [playlistDialog, setPlaylistDialog] = useState<
     { kind: "create" } | { kind: "manage"; id: string } | null
@@ -57,6 +57,10 @@ export default function App() {
     setAuthOpen(false);
   }, []);
 
+  const handleAccountUpdated = useCallback((acc: Account) => {
+    setAccount(acc);
+  }, []);
+
   const handleLogout = useCallback(() => {
     logout().catch(() => {});
     setAccount(null);
@@ -69,8 +73,8 @@ export default function App() {
   const closeLogin = useCallback(() => setAuthOpen(false), []);
   const openUpload = useCallback(() => setUploadOpen(true), []);
   const closeUpload = useCallback(() => setUploadOpen(false), []);
-  const openPassword = useCallback(() => setPasswordOpen(true), []);
-  const closePassword = useCallback(() => setPasswordOpen(false), []);
+  const openAccount = useCallback(() => setAccountOpen(true), []);
+  const closeAccount = useCallback(() => setAccountOpen(false), []);
 
   const afterUpload = useCallback(() => {
     setView("browse");
@@ -237,7 +241,7 @@ export default function App() {
   const playerOpen = view === "player" && queue.length > 0 && currentIndex >= 0;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-zinc-950 text-zinc-100">
+    <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] flex-col overflow-hidden bg-zinc-950 text-zinc-100">
       {!playerOpen && (
         <div className="flex flex-1 overflow-hidden">
           <Home
@@ -253,7 +257,7 @@ export default function App() {
             onLogin={openLogin}
             onLogout={handleLogout}
             onUpload={openUpload}
-            onChangePassword={openPassword}
+            onAccount={openAccount}
             onEdit={openEdit}
             onDelete={handleDelete}
             onCreatePlaylist={openCreatePlaylist}
@@ -273,6 +277,9 @@ export default function App() {
           onBack={goToBrowse}
           onExpand={goToPlayer}
           compact={!playerOpen}
+          account={account}
+          onEdit={openEdit}
+          onDelete={handleDelete}
         />
       )}
       {authOpen && (
@@ -302,13 +309,17 @@ export default function App() {
           </div>
         </div>
       )}
-      {passwordOpen && account && (
+      {accountOpen && account && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={closePassword}
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4"
+          onClick={closeAccount}
         >
-          <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <ChangePasswordDialog onClose={closePassword} onChanged={closePassword} />
+          <div className="my-auto w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <AccountDialog
+              account={account}
+              onClose={closeAccount}
+              onAccountUpdated={handleAccountUpdated}
+            />
           </div>
         </div>
       )}

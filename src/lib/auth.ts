@@ -92,6 +92,12 @@ export async function login(
 
   if (error || !data.user) return { error: friendlyAuthError(error?.message) };
 
+  // Preserve the stored display name: ensure_account_link overwrites
+  // display_name with p_display_name whenever it is non-empty, so only link
+  // (which passes the username as fallback) when no accounts row exists yet.
+  const existing = await getCurrentAccount();
+  if (existing) return { account: existing };
+
   const account = await linkAccount(cleanName, cleanName);
   return account ? { account } : { error: "Could not load profile" };
 }
@@ -112,6 +118,44 @@ async function linkAccount(
 
 export async function logout(): Promise<void> {
   await supabase.auth.signOut();
+}
+
+// Update the visible display name (playlist author name). Reuses the
+// ensure_account_link RPC, which only overwrites display_name when
+// p_display_name is non-empty — username is passed through unchanged.
+export async function updateDisplayName(
+  username: string,
+  displayName: string,
+): Promise<{ account?: Account; error?: string }> {
+  const clean = displayName.trim();
+  if (!clean) return { error: "Display name can't be empty" };
+  if (clean.length > 20) {
+    return { error: "Display name must be 20 characters or less" };
+  }
+
+  const { data, error } = await supabase.rpc("ensure_account_link", {
+    p_username: username,
+    p_display_name: clean,
+  });
+  if (error || !data) {
+    return { error: error?.message ?? "Could not update display name" };
+  }
+  const acc = data as Account;
+  const updated = {
+    id: acc.id,
+    username: acc.username,
+    display_name: acc.display_name,
+  };
+
+  // Playlist author names are snapshotted at creation, so sync the user's
+  // existing playlists too (best effort; owners may update their own rows).
+  const { error: plError } = await supabase
+    .from("playlists")
+    .update({ creator_name: updated.display_name })
+    .eq("user_id", updated.id);
+  if (plError) console.warn("Could not sync playlist author names", plError);
+
+  return { account: updated };
 }
 
 export async function changePassword(newPassword: string): Promise<{ success?: boolean; error?: string }> {

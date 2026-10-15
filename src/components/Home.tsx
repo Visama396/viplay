@@ -18,7 +18,7 @@ export interface HomeProps {
   onLogin: () => void;
   onLogout: () => void;
   onUpload: () => void;
-  onChangePassword: () => void;
+  onAccount: () => void;
   onEdit: (song: Song) => void;
   onDelete: (songId: string) => void;
   onCreatePlaylist: () => void;
@@ -40,7 +40,7 @@ export default function Home({
   onLogin,
   onLogout,
   onUpload,
-  onChangePassword,
+  onAccount,
   onEdit,
   onDelete,
   onCreatePlaylist,
@@ -108,7 +108,7 @@ export default function Home({
   const myPlaylists = playlists.filter((pl) => isPlaylistOwner(pl, account));
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-w-0 flex-1">
       <aside className="hidden w-72 shrink-0 overflow-y-auto border-r border-zinc-800 p-4 sm:block">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -201,24 +201,24 @@ export default function Home({
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-between gap-4 p-6">
-          <div>
+      <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 p-4 sm:flex-nowrap sm:gap-4 sm:p-6">
+          <div className="order-1 min-w-0 flex-1">
             <h1 className="text-2xl font-bold text-white">ViPlay</h1>
             <p className="text-sm text-zinc-400">Browse songs and playlists</p>
           </div>
-          <div className="flex items-center gap-3">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search songs..."
-              className="w-full max-w-xs rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-rose-500"
-            />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search songs..."
+            className="order-3 min-w-0 max-w-full basis-full rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-rose-500 sm:order-2 sm:basis-auto sm:w-48 sm:flex-none lg:w-64"
+          />
+          <div className="order-2 flex shrink-0 items-center gap-2 sm:order-3 sm:gap-3">
             {account ? (
               <>
                 <button
                   onClick={onUpload}
-                  className="rounded-full bg-rose-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-rose-400"
+                  className="shrink-0 rounded-full bg-rose-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-rose-400"
                 >
                   Upload
                 </button>
@@ -226,14 +226,14 @@ export default function Home({
                   {account.display_name}
                 </span>
                 <button
-                  onClick={onChangePassword}
-                  className="hidden rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white sm:block"
+                  onClick={onAccount}
+                  className="shrink-0 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
                 >
-                  Password
+                  Account
                 </button>
                 <button
                   onClick={onLogout}
-                  className="rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+                  className="shrink-0 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
                 >
                   Logout
                 </button>
@@ -241,7 +241,7 @@ export default function Home({
             ) : (
               <button
                 onClick={onLogin}
-                className="rounded-full bg-rose-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-rose-400"
+                className="shrink-0 rounded-full bg-rose-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-rose-400"
               >
                 Login
               </button>
