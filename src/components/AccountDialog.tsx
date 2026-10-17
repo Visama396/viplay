@@ -14,7 +14,6 @@ export default function AccountDialog({ account, onClose, onAccountUpdated }: Ac
   const [nameMessage, setNameMessage] = useState("");
   const [nameLoading, setNameLoading] = useState(false);
 
-  const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [pwError, setPwError] = useState("");
@@ -54,24 +53,19 @@ export default function AccountDialog({ account, onClose, onAccountUpdated }: Ac
     }
 
     setPwLoading(true);
-    // First re-authenticate with the current password so updateUser is allowed.
-    const reauth = await checkCurrentPassword(current);
-    if (reauth) {
-      setPwError(reauth);
-      setPwLoading(false);
-      return;
-    }
-
     const result = await changePassword(next);
     setPwLoading(false);
     if (result.error) {
       setPwError(result.error);
       return;
     }
-    setCurrent("");
     setNext("");
     setConfirm("");
-    setPwMessage("Password updated.");
+    setPwMessage(
+      result.othersSignedOut
+        ? "Password updated. Other sessions have been signed out."
+        : "Password updated, but the other sessions could not be signed out.",
+    );
   }
 
   const inputClass =
@@ -129,17 +123,7 @@ export default function AccountDialog({ account, onClose, onAccountUpdated }: Ac
 
       <form onSubmit={handlePasswordSubmit} className="space-y-4">
         <h3 className="text-sm font-semibold text-zinc-200">Change password</h3>
-        <div>
-          <label className="mb-1 block text-xs text-zinc-400">Current password</label>
-          <input
-            type="password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-            className={inputClass}
-            required
-            autoComplete="current-password"
-          />
-        </div>
+        <p className="-mt-2 text-xs text-zinc-500">Your other devices will be signed out.</p>
         <div>
           <label className="mb-1 block text-xs text-zinc-400">New password</label>
           <input
@@ -178,18 +162,3 @@ export default function AccountDialog({ account, onClose, onAccountUpdated }: Ac
   );
 }
 
-// Re-authenticate with the current password. Some Supabase Auth configs require
-// a recent sign-in before updateUser; this verifies the current password first
-// and refreshes the session. Returns an error string or null on success.
-async function checkCurrentPassword(current: string): Promise<string | null> {
-  const { data: { user } } = await import("../lib/supabase").then((m) => m.supabase.auth.getUser());
-  if (!user?.email) return null;
-
-  const { supabase } = await import("../lib/supabase");
-  const { error } = await supabase.auth.signInWithPassword({
-    email: user.email,
-    password: current,
-  });
-  if (error) return "Current password is incorrect";
-  return null;
-}

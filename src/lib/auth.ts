@@ -158,10 +158,17 @@ export async function updateDisplayName(
   return { account: updated };
 }
 
-export async function changePassword(newPassword: string): Promise<{ success?: boolean; error?: string }> {
+export async function changePassword(
+  newPassword: string,
+): Promise<{ success?: boolean; error?: string; othersSignedOut?: boolean }> {
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) return { error: error.message };
-  return { success: true };
+
+  // Close the other sessions: if the password leaked, the other devices lose
+  // access. The "others" scope keeps the current session open.
+  const { error: othersError } = await supabase.auth.signOut({ scope: "others" });
+
+  return { success: true, othersSignedOut: !othersError };
 }
 
 export { fakeEmail };
