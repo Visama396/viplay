@@ -8,7 +8,7 @@ import AccountDialog from "./AccountDialog";
 import EditSongDialog from "./EditSongDialog";
 import { supabase } from "../lib/supabase";
 import { deleteSong } from "../lib/upload";
-import { fetchCatalog, getRecentPlays, recordPlay } from "../lib/catalog";
+import { fetchCatalog, getRecentPlays, recordPlay, recordSongPlay } from "../lib/catalog";
 import { addSongToPlaylist, copyPlaylist, isPlaylistOwner } from "../lib/playlists";
 import type { Account } from "../lib/auth";
 import { getCurrentAccount, logout } from "../lib/auth";
@@ -37,11 +37,18 @@ export default function App() {
 
   const currentSong = queue[currentIndex];
 
-  // Track listening history (per-device) for the "Recently listened" section.
+  // Track listening history (per-device) and the shared play count
+  // (server-side) used by the "Most listened" section.
   useEffect(() => {
-    if (currentSong) {
-      setRecentIds(recordPlay(currentSong.id).map((p) => p.id));
-    }
+    const id = currentSong?.id;
+    if (!id) return;
+    setRecentIds(recordPlay(id).map((p) => p.id));
+    recordSongPlay(id).then((count) => {
+      if (count == null) return;
+      setSongs((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, play_count: count } : s)),
+      );
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong?.id]);
 

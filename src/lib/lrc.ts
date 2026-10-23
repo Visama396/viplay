@@ -230,6 +230,11 @@ export function getActiveLyrics(
 ): ActiveLyrics | null {
   if (lines.length === 0) return null;
 
+  // Before the first line (intro / after seeking to the start) nothing is
+  // being sung yet. Treating line 0 as active made the first lyric look
+  // "stuck" during the intro.
+  if (time < lines[0].time) return null;
+
   const lineIndex = searchByTime(
     lines.map((l) => l.time),
     time,

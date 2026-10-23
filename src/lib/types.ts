@@ -16,6 +16,8 @@ export interface Song {
   /** Label for the secondary track shown in the toggle (e.g. "Romanized"). */
   secondary_lyrics_label: string | null;
   uploaded_by: string | null;
+  /** How many times the song has been played (0 until 0012 is applied). */
+  play_count?: number;
   created_at: string;
 }
 

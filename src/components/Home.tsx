@@ -100,6 +100,17 @@ export default function Home({
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
     .slice(0, 10);
 
+  // Most listened (server-side counts; empty until the first play, in which
+  // case the rail falls back to Last Added).
+  const mostListened = [...songs]
+    .filter((s) => (s.play_count ?? 0) > 0)
+    .sort(
+      (a, b) =>
+        (b.play_count ?? 0) - (a.play_count ?? 0) ||
+        +new Date(b.created_at) - +new Date(a.created_at),
+    )
+    .slice(0, 10);
+
   const songById = new Map(songs.map((s) => [s.id, s]));
   const recentSongs = recentIds
     .map((id) => songById.get(id))
@@ -383,7 +394,19 @@ export default function Home({
               ))}
             </Section>
           )}
-          {isBrowsing && !loading && lastAdded.length > 0 && (
+          {isBrowsing && !loading && mostListened.length > 0 && (
+            <Section title="Most listened">
+              {mostListened.map((song) => (
+                <RailCard
+                  key={song.id}
+                  song={song}
+                  plays={song.play_count}
+                  onPlay={onPlay}
+                />
+              ))}
+            </Section>
+          )}
+          {isBrowsing && !loading && mostListened.length === 0 && lastAdded.length > 0 && (
             <Section title="Last Added">
               {lastAdded.map((song) => (
                 <RailCard key={song.id} song={song} onPlay={onPlay} />
@@ -603,7 +626,15 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function RailCard({ song, onPlay }: { song: Song; onPlay: (songs: Song[]) => void }) {
+function RailCard({
+  song,
+  plays,
+  onPlay,
+}: {
+  song: Song;
+  plays?: number;
+  onPlay: (songs: Song[]) => void;
+}) {
   return (
     <div
       onClick={() => onPlay([song])}
@@ -630,6 +661,11 @@ function RailCard({ song, onPlay }: { song: Song; onPlay: (songs: Song[]) => voi
         {song.title}
       </div>
       <div className="truncate text-xs text-zinc-400">{song.artist}</div>
+      {plays != null && plays > 0 && (
+        <div className="truncate text-[11px] text-zinc-500">
+          {plays} play{plays === 1 ? "" : "s"}
+        </div>
+      )}
     </div>
   );
 }

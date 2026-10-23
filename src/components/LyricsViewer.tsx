@@ -56,6 +56,23 @@ export default function LyricsViewer({
     setSmoothTime(currentTime);
   }, [activeContent]);
 
+  // A seek can finish without another animated frame being delivered (paused
+  // tab, backgrounded audio, some browsers), leaving the karaoke wipe on the
+  // pre-seek line. Sync immediately on the audio element's seek events.
+  useEffect(() => {
+    const el = audioRef?.current;
+    if (!el) return;
+    const sync = () => setSmoothTime(el.currentTime);
+    el.addEventListener("seeking", sync);
+    el.addEventListener("seeked", sync);
+    el.addEventListener("loadedmetadata", sync);
+    return () => {
+      el.removeEventListener("seeking", sync);
+      el.removeEventListener("seeked", sync);
+      el.removeEventListener("loadedmetadata", sync);
+    };
+  }, [audioRef, activeContent]);
+
   useEffect(() => {
     const el = audioRef?.current;
     if (!el) {
@@ -66,8 +83,9 @@ export default function LyricsViewer({
     let last = -1;
     const tick = () => {
       const t = el.currentTime ?? currentTime;
-      // Skip re-renders when paused (time unchanged) and throttle tiny jitter.
-      if (t !== last && Math.abs(t - last) > 0.015) {
+      // Only skip when the clock truly hasn't moved, so seeks (including
+      // small backwards jumps) always reach the karaoke state.
+      if (t !== last) {
         last = t;
         setSmoothTime(t);
       }
@@ -116,15 +134,27 @@ export default function LyricsViewer({
   // Reset follow mode and scroll position when the song/lyrics change.
   useEffect(() => {
     setFollowActive(true);
+    // This programmatic scroll also emits a scroll event; mark it so the
+    // handler below doesn't mistake it for a manual scroll and disable
+    // follow mode right after switching songs.
+    lastAutoScrollAt.current = Date.now();
     containerRef.current?.scrollTo({ top: 0 });
   }, [activeContent]);
 
   useEffect(() => {
-    if (active == null || !followActive) return;
+    if (!followActive) return;
     const container = containerRef.current;
-    const el = lineRefs.current.get(active.lineIndex);
-    if (!container || !el) return;
+    if (!container) return;
     lastAutoScrollAt.current = Date.now();
+    // Before the first lyric (or after seeking into an intro) there is no
+    // active line; bring the pane back to the start so it doesn't stay at
+    // the pre-seek position.
+    if (active == null) {
+      container.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const el = lineRefs.current.get(active.lineIndex);
+    if (!el) return;
     // Center the highlighted line in the pane. scrollIntoView can scroll
     // outer ancestors instead and is imprecise here, so compute it manually.
     const cRect = container.getBoundingClientRect();
@@ -139,10 +169,16 @@ export default function LyricsViewer({
 
   const handleManualScroll = () => {
     // Ignore scroll events caused by our own auto-scroll so follow mode
-    // isn't disabled by the smooth scrollIntoView above.
-    if (Date.now() - lastAutoScrollAt.current < 800) return;
+    // isn't disabled by the smooth scroll above. Long jumps (e.g. seeking
+    // backwards across the whole song) can keep emitting scroll events for
+    // a while, so the window is generous.
+    if (Date.now() - lastAutoScrollAt.current < 1200) return;
     setFollowActive(false);
   };
+
+  // Explicit gestures are the reliable signal for "the user scrolled".
+  // Programmatic smooth scrolling emits `scroll` but never wheel/touch.
+  const handleUserScrollIntent = () => setFollowActive(false);
 
   if (!activeContent) {
     return (
@@ -179,6 +215,8 @@ export default function LyricsViewer({
       <div
         ref={containerRef}
         onScroll={handleManualScroll}
+        onWheel={handleUserScrollIntent}
+        onTouchMove={handleUserScrollIntent}
         className="min-h-0 w-full min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-contain"
       >
         <div

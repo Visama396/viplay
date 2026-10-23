@@ -155,6 +155,27 @@ export async function setSongGenres(songId: string, names: string[]): Promise<vo
 }
 
 // ---------------------------------------------------------------------------
+// Play counts (server-side, shared across devices)
+// ---------------------------------------------------------------------------
+
+/**
+ * Increments a song's play count atomically. Best-effort: returns the new
+ * total, or null when the 0012 migration hasn't been applied or the call
+ * fails (playback is never blocked by counting).
+ */
+export async function recordSongPlay(songId: string): Promise<number | null> {
+  try {
+    const { data, error } = await supabase.rpc("record_song_play", {
+      p_song_id: songId,
+    });
+    if (error) return null;
+    return typeof data === "number" ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Recently played (per-device, localStorage — works logged out)
 // ---------------------------------------------------------------------------
 
