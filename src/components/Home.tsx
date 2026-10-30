@@ -25,6 +25,7 @@ export interface HomeProps {
   onManagePlaylist: (playlist: PlaylistWithSongs) => void;
   onCopyPlaylist: (playlist: PlaylistWithSongs) => void;
   onQuickAdd: (songId: string, playlist: PlaylistWithSongs) => void;
+  onPlayPlaylist: (playlist: PlaylistWithSongs) => void;
 }
 
 export default function Home({
@@ -47,6 +48,7 @@ export default function Home({
   onManagePlaylist,
   onCopyPlaylist,
   onQuickAdd,
+  onPlayPlaylist,
 }: HomeProps) {
   const [query, setQuery] = useState("");
   const [addMenuSongId, setAddMenuSongId] = useState<string | null>(null);
@@ -156,7 +158,7 @@ export default function Home({
                 className="group/pl flex w-full items-center gap-1 rounded-lg transition hover:bg-zinc-800/60"
               >
                 <button
-                  onClick={() => onPlay(pl.songs)}
+                  onClick={() => onPlayPlaylist(pl)}
                   className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-left"
                 >
                   <span className="min-w-0">
@@ -290,7 +292,7 @@ export default function Home({
                     className="flex shrink-0 items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 py-1 pl-3 pr-1"
                   >
                     <button
-                      onClick={() => onPlay(pl.songs)}
+                      onClick={() => onPlayPlaylist(pl)}
                       className="flex items-center gap-1.5 text-left"
                     >
                       {!pl.is_public && (

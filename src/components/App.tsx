@@ -34,6 +34,8 @@ export default function App() {
   >(null);
   const [view, setView] = useState<"browse" | "player">("browse");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [activePlaylist, setActivePlaylist] = useState<PlaylistWithSongs | null>(null);
+  const [playlistViewOpen, setPlaylistViewOpen] = useState(false);
 
   const currentSong = queue[currentIndex];
 
@@ -226,15 +228,26 @@ export default function App() {
     // becomes the queue itself.
     if (requested.length === 1) {
       const idx = songs.findIndex((s) => s.id === requested[0].id);
+      setActivePlaylist(null);
       switchQueue(songs, idx < 0 ? 0 : idx);
     } else {
       switchQueue(requested, 0);
     }
   }, [songs, switchQueue]);
 
+  const handlePlayPlaylist = useCallback(
+    (pl: PlaylistWithSongs) => {
+      setActivePlaylist(pl);
+      handlePlay(pl.songs);
+    },
+    [handlePlay],
+  );
+
   const handleNext = useCallback(() => {
     setCurrentIndex((i) => (i >= queue.length - 1 ? queue.length - 1 : i + 1));
   }, [queue.length]);
+
+  const handleRestart = useCallback(() => setCurrentIndex(0), []);
 
   const handlePrev = useCallback(() => {
     setCurrentIndex((i) => (i <= 0 ? 0 : i - 1));
@@ -271,6 +284,7 @@ export default function App() {
             onManagePlaylist={openManagePlaylist}
             onCopyPlaylist={handleCopyPlaylist}
             onQuickAdd={handleQuickAdd}
+            onPlayPlaylist={handlePlayPlaylist}
           />
         </div>
       )}
@@ -287,6 +301,11 @@ export default function App() {
           account={account}
           onEdit={openEdit}
           onDelete={handleDelete}
+          playlist={activePlaylist}
+          playlistOpen={playlistViewOpen}
+          onPlaylistOpenChange={setPlaylistViewOpen}
+          onPlay={handlePlay}
+          onRestart={handleRestart}
         />
       )}
       {authOpen && (
@@ -347,7 +366,12 @@ export default function App() {
               account={account}
               onClose={closePlaylistDialog}
               onChanged={handlePlaylistChanged}
-              onPlay={handlePlay}
+              onPlay={(songs) => {
+                const manageId = playlistDialog.kind === "manage" ? playlistDialog.id : null;
+                const pl = manageId ? playlists.find((p) => p.id === manageId) : undefined;
+                setActivePlaylist(pl ?? null);
+                handlePlay(songs);
+              }}
             />
           </div>
         </div>

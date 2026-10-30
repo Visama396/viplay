@@ -9,3 +9,12 @@
     @apply bg-zinc-950 text-zinc-100;
   }
 }
+
+@keyframes viplay-eq {
+  0%, 100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}

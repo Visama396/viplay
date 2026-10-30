@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getPublicUrl, supabase } from "../lib/supabase";
 import type { Account } from "../lib/auth";
-import type { Song } from "../lib/types";
+import type { PlaylistWithSongs, Song } from "../lib/types";
 import LyricsViewer from "./LyricsViewer";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import PlaylistViewDialog from "./PlaylistViewDialog";
 
 interface PlayerProps {
   queue: Song[];
@@ -16,6 +18,16 @@ interface PlayerProps {
   account: Account | null;
   onEdit: (song: Song) => void;
   onDelete: (songId: string) => void;
+  /** The playlist whose songs are in the queue, if any. */
+  playlist: PlaylistWithSongs | null;
+  /** Whether the playlist popover is open. */
+  playlistOpen: boolean;
+  /** Called when the playlist popover open state changes. */
+  onPlaylistOpenChange: (open: boolean) => void;
+  /** Play a list of songs (from the playlist popover). */
+  onPlay: (songs: Song[]) => void;
+  /** Restarts the queue from the beginning (playlist loop). */
+  onRestart: () => void;
 }
 
 export default function Player({
@@ -30,6 +42,11 @@ export default function Player({
   account,
   onEdit,
   onDelete,
+  playlist,
+  playlistOpen,
+  onPlaylistOpenChange,
+  onPlay,
+  onRestart,
 }: PlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -38,13 +55,13 @@ export default function Player({
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [secondaryLyrics, setSecondaryLyrics] = useState<string | null>(null);
   const [volume, setVolume] = useState(1);
-  const [loop, setLoop] = useState(false);
+  const [loop, setLoop] = useState<0 | 1 | 2>(0); // 0 = off, 1 = song, 2 = playlist
 
   const song: Song | undefined = queue[currentIndex];
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (audio) audio.loop = loop;
+    if (audio) audio.loop = loop === 1;
   }, [loop]);
 
   useEffect(() => {
@@ -121,6 +138,18 @@ export default function Player({
   };
 
   const toggle = () => setPlaying((p) => !p);
+
+  const cycleLoop = () => setLoop((l) => (l === 0 ? 1 : l === 1 ? 2 : 0));
+  const loopLabel = loop === 0 ? "Loop off" : loop === 1 ? "Loop song" : "Loop playlist";
+
+  const handleEnded = () => {
+    if (loop === 2 && currentIndex >= queue.length - 1) {
+      // Looping the playlist: restart from the first song.
+      onRestart();
+      return;
+    }
+    onEnded();
+  };
 
   const progress =
     duration > 0 && Number.isFinite(duration)
@@ -247,11 +276,17 @@ export default function Player({
     </svg>
   );
 
-  const loopIcon = (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h3h9v-6h-2v4z" />
-    </svg>
-  );
+  const loopIcon =
+    loop === 2 ? (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M17.5 7.5l5 4.5-5 4.5" />
+      </svg>
+    ) : (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h3h9v-6h-2v4z" />
+      </svg>
+    );
 
   const volumeIcon =
     volume === 0 ? (
@@ -270,7 +305,7 @@ export default function Player({
         ref={audioRef}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onEnded={onEnded}
+        onEnded={handleEnded}
       />
 
       {compact ? (
@@ -342,11 +377,11 @@ export default function Player({
             </svg>
           </button>
           <button
-            onClick={() => setLoop((l) => !l)}
+            onClick={cycleLoop}
             className={`shrink-0 transition ${
-              loop ? "text-rose-500" : "text-zinc-300 hover:text-white"
+              loop !== 0 ? "text-rose-500" : "text-zinc-300 hover:text-white"
             }`}
-            aria-label={loop ? "Loop on" : "Loop off"}
+            aria-label={loopLabel}
           >
             {loopIcon}
           </button>
@@ -378,6 +413,14 @@ export default function Player({
               </svg>
               Browse
             </button>
+            {playlist && (
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-white">{playlist.name}</div>
+                {playlist.description && (
+                  <div className="truncate text-xs text-zinc-400">{playlist.description}</div>
+                )}
+              </div>
+            )}
             {canEdit && (
               <button
                 onClick={() => onEdit(song)}
@@ -449,12 +492,39 @@ export default function Player({
                 <span>{format(duration)}</span>
               </div>
               <div className="flex items-center justify-center gap-5 sm:gap-6">
+                {playlist && (
+                  <Popover open={playlistOpen} onOpenChange={onPlaylistOpenChange}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-zinc-300 transition hover:text-white"
+                        aria-label={`View playlist ${playlist.name}`}
+                        title="View playlist songs"
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h12v2H3v-2z" />
+                        </svg>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent>
+                      {playlist && (
+                        <PlaylistViewDialog
+                          playlist={playlist}
+                          onPlay={onPlay}
+                          onOpenChange={onPlaylistOpenChange}
+                          currentSongId={song?.id ?? null}
+                          isPlaying={playing}
+                        />
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                )}
                 <button
-                  onClick={() => setLoop((l) => !l)}
+                  onClick={cycleLoop}
                   className={`transition ${
-                    loop ? "text-rose-500" : "text-zinc-300 hover:text-white"
+                    loop !== 0 ? "text-rose-500" : "text-zinc-300 hover:text-white"
                   }`}
-                  aria-label={loop ? "Loop on" : "Loop off"}
+                  aria-label={loopLabel}
                 >
                   {loopIcon}
                 </button>
