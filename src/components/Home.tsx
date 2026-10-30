@@ -275,7 +275,7 @@ export default function Home({
             </button>
           </div>
           {loading ? (
-            <div className="flex gap-2 overflow-x-auto pb-2" aria-label="Loading playlists">
+            <div className="flex gap-2 overflow-x-auto pb-3" aria-label="Loading playlists">
               {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton key={i} className="h-8 w-28 shrink-0 rounded-full" />
               ))}
@@ -283,7 +283,7 @@ export default function Home({
           ) : playlists.length === 0 ? (
             <p className="py-2 text-sm text-zinc-600">No playlists yet</p>
           ) : (
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-3">
               {playlists.map((pl) => {
                 const owner = isPlaylistOwner(pl, account);
                 return (
@@ -359,7 +359,7 @@ export default function Home({
               </div>
             )}
             {allGenres.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="flex gap-2 overflow-x-auto pb-3">
                 <button
                   onClick={() => setGenre(null)}
                   className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
@@ -420,7 +420,7 @@ export default function Home({
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
                 Songs by artist
               </h2>
-              <div className="flex gap-2 overflow-x-auto pb-2">
+              <div className="flex gap-2 overflow-x-auto pb-3">
                 {artistEntries.slice(0, 12).map((a) => (
                   <button
                     key={a.key}
@@ -448,20 +448,20 @@ export default function Home({
               All songs
             </h2>
           )}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="flex flex-col">
             {loading
               ? Array.from({ length: 8 }).map((_, i) => (
                   <div
                     key={i}
-                    className="overflow-hidden rounded-xl bg-zinc-900 p-3"
+                    className="flex items-center gap-3 rounded-lg px-2 py-2"
                     aria-label="Loading song"
                   >
-                    <Skeleton className="aspect-square w-full rounded-lg" />
-                    <div className="mt-3">
+                    <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+                    <div className="min-w-0 flex-1">
                       <Skeleton className="h-4 w-3/4" />
                       <Skeleton className="mt-1.5 h-3 w-1/2" />
                     </div>
-                    <div className="mt-2 flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                       <Skeleton className="h-6 w-16 rounded-full" />
                       <Skeleton className="h-6 w-8 rounded-full" />
                     </div>
@@ -482,61 +482,65 @@ export default function Home({
                   }}
                   role="button"
                   tabIndex={0}
-                  className={`group relative cursor-pointer overflow-hidden rounded-xl bg-zinc-900 p-3 transition hover:bg-zinc-800 ${
-                    isCurrent ? "ring-2 ring-rose-500" : ""
-                  }`}
+                  className={`group relative flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-zinc-800/60 ${isCurrent ? "bg-zinc-800/60" : ""}`}
                 >
-                  {isAdmin && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDelete(song.id);
-                      }}
-                      className="absolute right-2 top-2 z-10 rounded-full bg-zinc-900/90 p-1.5 text-zinc-300 opacity-0 transition hover:bg-red-600 hover:text-white group-hover:opacity-100"
-                      aria-label={`Delete ${song.title}`}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 6h18M8 6V4h8v2m1 0v14a2 2 0 01-2 2H9a2 2 0 01-2-2V6" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  )}
-                  {canEdit && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(song);
-                      }}
-                      className="absolute right-9 top-2 z-10 rounded-full bg-zinc-900/90 p-1.5 text-zinc-300 opacity-0 transition hover:bg-zinc-700 hover:text-white group-hover:opacity-100"
-                      aria-label={`Edit ${song.title}`}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  )}
-                  {song.artwork_path && (
+                  {song.artwork_path ? (
                     <img
                       src={getPublicUrl("artwork", song.artwork_path)}
                       alt={`${song.title} artwork`}
-                      className="aspect-square w-full rounded-lg object-cover"
+                      className="h-10 w-10 shrink-0 rounded-lg object-cover"
                     />
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-800 text-sm font-bold text-zinc-600">
+                      {song.title.trim().charAt(0).toUpperCase() || "♪"}
+                    </div>
                   )}
-                  <div className="mt-3">
+                  <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-zinc-100">
                       {song.title}
                     </div>
                     <div className="truncate text-xs text-zinc-400">{song.artist}</div>
                   </div>
-                  <div className="relative mt-2 flex items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2">
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(song.id);
+                        }}
+                        className="rounded-full bg-zinc-900/90 p-1.5 text-zinc-300 opacity-0 transition hover:bg-red-600 hover:text-white group-hover:opacity-100"
+                        aria-label={`Delete ${song.title}`}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M3 6h18M8 6V4h8v2m1 0v14a2 2 0 01-2 2H9a2 2 0 01-2-2V6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(song);
+                        }}
+                        className="rounded-full bg-zinc-900/90 p-1.5 text-zinc-300 opacity-0 transition hover:bg-zinc-700 hover:text-white group-hover:opacity-100"
+                        aria-label={`Edit ${song.title}`}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onPlay([song]);
                       }}
-                      className="rounded-full bg-rose-500 px-3 py-1 text-xs font-medium text-white transition hover:bg-rose-400 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-200 transition hover:bg-rose-500 hover:text-white"
                       aria-label="Play"
                     >
-                      Play
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
                     </button>
                     {account && (
                       <button
@@ -606,7 +610,7 @@ export default function Home({
               );
             })}
             {!loading && filtered.length === 0 && (
-              <p className="col-span-full py-16 text-center text-zinc-500">
+              <p className="py-16 text-center text-zinc-500">
                 No songs found
               </p>
             )}
@@ -623,7 +627,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
         {title}
       </h2>
-      <div className="flex gap-4 overflow-x-auto pb-2">{children}</div>
+      <div className="flex gap-4 overflow-x-auto pb-3">{children}</div>
     </div>
   );
 }
