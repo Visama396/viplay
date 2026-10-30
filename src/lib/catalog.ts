@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Album, Artist, Genre } from "./types";
+import type { Album, Artist, Genre, Song } from "./types";
 
 export interface Catalog {
   artists: Artist[];
@@ -52,6 +52,29 @@ export async function fetchCatalog(): Promise<Catalog> {
 
 function sameName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
+// Display helpers
+// ---------------------------------------------------------------------------
+
+/** Lookup of artist id -> name, built once per catalog load. */
+export function artistNameMap(artists: Artist[]): Map<string, string> {
+  return new Map(artists.map((a) => [a.id, a.name]));
+}
+
+/**
+ * The name to show for a song's artist. When the song is linked to a catalog
+ * artist, the catalog name wins so renames in `artists` propagate to the UI.
+ * The free-text `songs.artist` column is only a fallback (rows created before
+ * the 0011 migration, or when the linked artist row is missing).
+ */
+export function artistDisplayName(
+  song: Pick<Song, "artist" | "artist_id">,
+  names: Map<string, string>,
+): string {
+  if (!song.artist_id) return song.artist;
+  return names.get(song.artist_id) ?? song.artist;
 }
 
 /** Finds an existing artist (case-insensitive) or creates it. Null on failure. */

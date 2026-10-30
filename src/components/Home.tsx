@@ -448,7 +448,7 @@ export default function Home({
               All songs
             </h2>
           )}
-          <div className="flex flex-col">
+          <div className="flex max-h-[35rem] flex-col overflow-y-auto pr-1">
             {loading
               ? Array.from({ length: 8 }).map((_, i) => (
                   <div

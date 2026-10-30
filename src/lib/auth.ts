@@ -43,12 +43,12 @@ export async function register(
     return { error: "Username can only contain lowercase letters, numbers, and underscores" };
   }
 
-  const { data: existing } = await supabase
-    .from("accounts")
-    .select("id")
-    .eq("username", cleanName)
-    .maybeSingle();
-  if (existing) return { error: "Username already taken" };
+  // Accounts are no longer readable before sign-in (RLS), so ask the
+  // SECURITY DEFINER RPC instead of selecting the table.
+  const { data: taken } = await supabase.rpc("username_taken", {
+    p_username: cleanName,
+  });
+  if (taken === true) return { error: "Username already taken" };
 
   const { data, error } = await supabase.auth.signUp({
     email: fakeEmail(cleanName),

@@ -8,7 +8,14 @@ import AccountDialog from "./AccountDialog";
 import EditSongDialog from "./EditSongDialog";
 import { supabase } from "../lib/supabase";
 import { deleteSong } from "../lib/upload";
-import { fetchCatalog, getRecentPlays, recordPlay, recordSongPlay } from "../lib/catalog";
+import {
+  artistDisplayName,
+  artistNameMap,
+  fetchCatalog,
+  getRecentPlays,
+  recordPlay,
+  recordSongPlay,
+} from "../lib/catalog";
 import { addSongToPlaylist, copyPlaylist, isPlaylistOwner } from "../lib/playlists";
 import type { Account } from "../lib/auth";
 import { getCurrentAccount, logout } from "../lib/auth";
@@ -176,7 +183,17 @@ export default function App() {
         if (playlistSongsRes.error) throw playlistSongsRes.error;
 
         const ps: PlaylistSong[] = playlistSongsRes.data ?? [];
-        const songById = new Map((songsRes.data ?? []).map((s) => [s.id, s]));
+
+        // The catalog is the source of truth for artist names: resolve each
+        // song's display name from artists.name, falling back to the free-text
+        // songs.artist column for rows without a catalog link.
+        const artistNames = artistNameMap(catalog.artists);
+        const resolvedSongs: Song[] = (songsRes.data ?? []).map((s: Song) => ({
+          ...s,
+          artist: artistDisplayName(s, artistNames),
+          genres: catalog.songGenres.get(s.id) ?? [],
+        }));
+        const songById = new Map(resolvedSongs.map((s) => [s.id, s]));
 
         const enriched: PlaylistWithSongs[] = (playlistsRes.data ?? []).map(
           (pl: Playlist) => ({
@@ -193,12 +210,7 @@ export default function App() {
         setAlbums(catalog.albums);
         setAllGenres(catalog.genres.map((g) => g.name));
         if (cancelled) return;
-        setSongs(
-          (songsRes.data ?? []).map((s: Song) => ({
-            ...s,
-            genres: catalog.songGenres.get(s.id) ?? [],
-          })),
-        );
+        setSongs(resolvedSongs);
       } catch (err) {
         console.error("Failed to load data", err);
       } finally {
