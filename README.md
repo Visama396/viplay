@@ -9,8 +9,9 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 
 - Browse songs and playlists
 - Home sections: Recently listened, Most listened, Songs by artist, All songs
-  (Most listened uses shared play counts; it falls back to Last Added until
-  songs have been played)
+  (Recently listened syncs across devices for logged-in users and stays
+  per-device for guests; Most listened uses shared play counts and falls back
+  to Last Added until songs have been played)
 - Search across title, artist, album, and genre; genre filter chips; artist filter
 - Artist / album autocomplete comboboxes when uploading or editing (existing
   entries are reused, new ones are created inline), plus album year and genres
@@ -66,7 +67,7 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 ### 1. Database
 
 Run the files in `supabase/migrations/` **in order** in your Supabase SQL
-editor (`0001_init.sql`, then `0002`–`0012`). The early migrations create:
+editor (`0001_init.sql`, then `0002`–`0015`). The early migrations create:
 
 - `accounts`, `songs`, `playlists`, and `playlist_songs` tables
 - RLS policies (everything publicly readable except private playlists, which
@@ -86,6 +87,12 @@ Migration `0012_play_counts.sql` adds `songs.play_count` and the
 `record_song_play` RPC. The app calls it whenever a track starts, and the
 home page ranks songs by the total. Without this migration the app still
 works, but the rail falls back to Last Added.
+
+Migration `0015_recent_plays.sql` adds the per-account `recent_plays` table
+(with owner-only RLS). Logged-in users get their "Recently listened" rail
+synced across devices; guests keep the existing per-device `localStorage`
+list. Without this migration the app still works, but logged-in history won't
+sync across devices.
 
 > Existing accounts link to Supabase Auth on first login via the fake-email
 > trick. No email is required from the user.

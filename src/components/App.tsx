@@ -11,10 +11,15 @@ import { deleteSong } from "../lib/upload";
 import {
   artistDisplayName,
   artistNameMap,
+  clearLocalRecentPlays,
   fetchCatalog,
-  getRecentPlays,
-  recordPlay,
+  fetchRecentPlays,
+  getLocalRecentPlays,
+  mergeLocalRecentPlays,
+  recordLocalPlay,
+  recordRemotePlay,
   recordSongPlay,
+  RECENT_LIMIT,
 } from "../lib/catalog";
 import { addSongToPlaylist, copyPlaylist, isPlaylistOwner } from "../lib/playlists";
 import type { Account } from "../lib/auth";
@@ -27,7 +32,9 @@ export default function App() {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [allGenres, setAllGenres] = useState<string[]>([]);
-  const [recentIds, setRecentIds] = useState<string[]>(() => getRecentPlays().map((p) => p.id));
+  const [recentIds, setRecentIds] = useState<string[]>(() =>
+    getLocalRecentPlays().map((p) => p.id),
+  );
   const [loading, setLoading] = useState(true);
   const [queue, setQueue] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -46,12 +53,17 @@ export default function App() {
 
   const currentSong = queue[currentIndex];
 
-  // Track listening history (per-device) and the shared play count
-  // (server-side) used by the "Most listened" section.
+  // Track listening history (server-side per account, localStorage for guests)
+  // and the shared play count used by the "Most listened" section.
   useEffect(() => {
     const id = currentSong?.id;
     if (!id) return;
-    setRecentIds(recordPlay(id).map((p) => p.id));
+    if (account) {
+      setRecentIds((prev) => [id, ...prev.filter((x) => x !== id)].slice(0, RECENT_LIMIT));
+      recordRemotePlay(account.id, id);
+    } else {
+      setRecentIds(recordLocalPlay(id).map((p) => p.id));
+    }
     recordSongPlay(id).then((count) => {
       if (count == null) return;
       setSongs((prev) =>
@@ -67,6 +79,41 @@ export default function App() {
       .then((acc) => setAccount(acc))
       .catch(() => setAccount(null));
   }, []);
+
+  // When signed in, load the account's history (merging this device's guest
+  // plays first). When signed out, fall back to the per-device guest list.
+  useEffect(() => {
+    if (!account) {
+      setRecentIds(getLocalRecentPlays().map((p) => p.id));
+      return;
+    }
+
+    let cancelled = false;
+    const guestIds = new Set(getLocalRecentPlays().map((p) => p.id));
+    (async () => {
+      const merged = await mergeLocalRecentPlays(account.id);
+      if (cancelled) return;
+      // Guest plays now belong to the account; don't let a different account
+      // on this shared device claim them later.
+      if (merged) clearLocalRecentPlays();
+      const plays = await fetchRecentPlays();
+      // null means the 0015 migration isn't applied or the request failed;
+      // keep showing the local list instead of wiping the rail.
+      if (cancelled || !plays) return;
+      setRecentIds((prev) => {
+        const fetched = plays.map((p) => p.id);
+        // Keep plays recorded while the request was in flight, but let the
+        // server decide which old guest plays made the cut.
+        const pending = prev.filter((id) => !fetched.includes(id) && !guestIds.has(id));
+        return [...pending, ...fetched].slice(0, RECENT_LIMIT);
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account?.id]);
 
   const handleAuth = useCallback((acc: Account) => {
     setAccount(acc);

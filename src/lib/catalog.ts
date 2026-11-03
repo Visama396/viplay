@@ -199,7 +199,12 @@ export async function recordSongPlay(songId: string): Promise<number | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Recently played (per-device, localStorage — works logged out)
+// Recently played
+//
+// Guests keep a per-device list in localStorage. Signed-in users get a
+// server-side history (`recent_plays`) so the rail follows them across
+// devices. localStorage is only written while logged out, so one account's
+// history is never merged into another account on a shared device.
 // ---------------------------------------------------------------------------
 
 export interface RecentPlay {
@@ -208,9 +213,10 @@ export interface RecentPlay {
 }
 
 const RECENT_KEY = "viplay:recently-played";
-const RECENT_LIMIT = 40;
+export const RECENT_LIMIT = 40;
 
-export function getRecentPlays(): RecentPlay[] {
+/** This browser's guest history (works logged out). */
+export function getLocalRecentPlays(): RecentPlay[] {
   try {
     const raw = localStorage.getItem(RECENT_KEY);
     if (!raw) return [];
@@ -222,11 +228,11 @@ export function getRecentPlays(): RecentPlay[] {
   }
 }
 
-/** Records a play and returns the updated ordered list (most recent first). */
-export function recordPlay(songId: string): RecentPlay[] {
+/** Records a guest play locally and returns the updated list (newest first). */
+export function recordLocalPlay(songId: string): RecentPlay[] {
   const next = [
     { id: songId, at: Date.now() },
-    ...getRecentPlays().filter((p) => p.id !== songId),
+    ...getLocalRecentPlays().filter((p) => p.id !== songId),
   ].slice(0, RECENT_LIMIT);
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(next));
@@ -234,4 +240,93 @@ export function recordPlay(songId: string): RecentPlay[] {
     // Storage full/blocked: listening history just won't persist.
   }
   return next;
+}
+
+/**
+ * Fetches the signed-in account's history from the server (newest first).
+ * Returns null when the 0015 migration hasn't been applied or the call fails,
+ * so the caller can keep showing the local fallback.
+ */
+export async function fetchRecentPlays(): Promise<RecentPlay[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from("recent_plays")
+      .select("song_id, played_at")
+      .order("played_at", { ascending: false })
+      .limit(RECENT_LIMIT);
+    if (error) return null;
+    return ((data ?? []) as Array<{ song_id: string; played_at: string }>).map(
+      (row) => ({
+        id: row.song_id,
+        at: new Date(row.played_at).getTime(),
+      }),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** Records a play for the signed-in account. Best-effort. */
+export async function recordRemotePlay(accountId: string, songId: string): Promise<void> {
+  try {
+    await supabase.from("recent_plays").upsert(
+      {
+        account_id: accountId,
+        song_id: songId,
+        played_at: new Date().toISOString(),
+      },
+      { onConflict: "account_id,song_id" },
+    );
+  } catch {
+    // Playback is never blocked by history persistence.
+  }
+}
+
+/**
+ * Copies this device's guest history into the account on sign-in. Existing
+ * server rows win, so a song played on another device keeps its timestamp.
+ * Returns true when the local plays were successfully handed over (or there
+ * were none), so the caller can clear them from this device.
+ */
+export async function mergeLocalRecentPlays(accountId: string): Promise<boolean> {
+  const local = getLocalRecentPlays();
+  if (local.length === 0) return true;
+  try {
+    // Skip entries whose song was deleted, otherwise the foreign key would
+    // reject the whole batch.
+    const { data: existing, error: songsError } = await supabase
+      .from("songs")
+      .select("id")
+      .in("id", local.map((p) => p.id));
+    if (songsError) return false;
+    const validIds = new Set(
+      ((existing ?? []) as Array<{ id: string }>).map((row) => row.id),
+    );
+    const toMerge = local.filter((p) => validIds.has(p.id));
+
+    if (toMerge.length > 0) {
+      const { error } = await supabase.from("recent_plays").upsert(
+        toMerge.map((p) => ({
+          account_id: accountId,
+          song_id: p.id,
+          played_at: new Date(p.at).toISOString(),
+        })),
+        { onConflict: "account_id,song_id", ignoreDuplicates: true },
+      );
+      if (error) return false;
+    }
+    return true;
+  } catch {
+    // Best effort: sync still works for plays recorded after sign-in.
+    return false;
+  }
+}
+
+/** Drops this browser's guest history after it has been merged into an account. */
+export function clearLocalRecentPlays(): void {
+  try {
+    localStorage.removeItem(RECENT_KEY);
+  } catch {
+    // Ignore storage errors.
+  }
 }
