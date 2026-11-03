@@ -24,8 +24,8 @@ interface PlayerProps {
   playlistOpen: boolean;
   /** Called when the playlist popover open state changes. */
   onPlaylistOpenChange: (open: boolean) => void;
-  /** Play a list of songs (from the playlist popover). */
-  onPlay: (songs: Song[]) => void;
+  /** Play from the playlist popover, keeping the playlist as the queue. */
+  onPlay: (songs: Song[], playlist?: PlaylistWithSongs | null) => void;
   /** Restarts the queue from the beginning (playlist loop). */
   onRestart: () => void;
 }

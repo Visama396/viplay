@@ -281,23 +281,27 @@ export default function App() {
   const goToBrowse = useCallback(() => setView("browse"), []);
   const goToPlayer = useCallback(() => setView("player"), []);
 
-  const handlePlay = useCallback((requested: Song[]) => {
-    if (requested.length === 0) return;
-    // A single song plays within the full song list as context; a playlist
-    // becomes the queue itself.
-    if (requested.length === 1) {
-      const idx = songs.findIndex((s) => s.id === requested[0].id);
-      setActivePlaylist(null);
-      switchQueue(songs, idx < 0 ? 0 : idx);
-    } else {
+  // A playlist is the only multi-song queue. Any individual song click plays
+  // just that song. `playlist` is passed when starting from a playlist view,
+  // so playback stays within that playlist instead of the whole library.
+  const handlePlay = useCallback(
+    (requested: Song[], playlist?: PlaylistWithSongs | null) => {
+      if (requested.length === 0) return;
+      if (playlist) {
+        setActivePlaylist(playlist);
+        const idx = playlist.songs.findIndex((s) => s.id === requested[0].id);
+        switchQueue(playlist.songs, idx < 0 ? 0 : idx);
+        return;
+      }
+      if (requested.length === 1) setActivePlaylist(null);
       switchQueue(requested, 0);
-    }
-  }, [songs, switchQueue]);
+    },
+    [switchQueue],
+  );
 
   const handlePlayPlaylist = useCallback(
     (pl: PlaylistWithSongs) => {
-      setActivePlaylist(pl);
-      handlePlay(pl.songs);
+      handlePlay(pl.songs, pl);
     },
     [handlePlay],
   );

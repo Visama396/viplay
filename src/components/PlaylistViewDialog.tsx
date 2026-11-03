@@ -3,7 +3,7 @@ import type { PlaylistWithSongs, Song } from "../lib/types";
 
 interface PlaylistViewDialogProps {
   playlist: PlaylistWithSongs;
-  onPlay: (songs: Song[]) => void;
+  onPlay: (songs: Song[], playlist?: PlaylistWithSongs) => void;
   onOpenChange: (open: boolean) => void;
   currentSongId?: string | null;
   isPlaying?: boolean;
@@ -62,7 +62,7 @@ export default function PlaylistViewDialog({
         <h3 className="text-sm font-semibold text-zinc-200">Songs ({songs.length})</h3>
         {songs.length > 0 && (
           <button
-            onClick={() => onPlay(playlist.songs)}
+            onClick={() => onPlay(playlist.songs, playlist)}
             className="text-xs font-medium text-rose-400 transition hover:text-rose-300"
           >
             Play all
@@ -84,7 +84,7 @@ export default function PlaylistViewDialog({
                 <div className="truncate text-xs text-zinc-500">{s.artist}</div>
               </div>
               <button
-                onClick={() => onPlay([s])}
+                onClick={() => onPlay([s], playlist)}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-200 transition hover:bg-rose-500 hover:text-white"
                 aria-label={isCurrentSong(s.id) ? `Now playing ${s.title}` : `Play ${s.title}`}
               >
