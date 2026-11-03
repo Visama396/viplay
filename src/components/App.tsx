@@ -213,7 +213,7 @@ export default function App() {
     async function load() {
       try {
         const [songsRes, playlistsRes, catalog] = await Promise.all([
-          supabase.from("songs").select("*").order("created_at"),
+          supabase.from("songs").select("*").order("created_at", { ascending: false }),
           supabase.from("playlists").select("*").order("created_at"),
           fetchCatalog(),
         ]);
