@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Account } from "../lib/auth";
-import type { Album, Artist } from "../lib/types";
+import type { Album, Artist, ArtworkOption } from "../lib/types";
 import { uploadSong } from "../lib/upload";
+import { ArtworkField } from "./ArtworkField";
 import { MetadataFields, type MetadataValue } from "./MetadataFields";
 
 interface UploadDialogProps {
@@ -9,17 +10,26 @@ interface UploadDialogProps {
   artists: Artist[];
   albums: Album[];
   allGenres: string[];
+  /** Uploaded covers available for reuse. */
+  covers?: ArtworkOption[];
   onClose: () => void;
   onUploaded: () => void;
 }
 
-const emptyMetadata: MetadataValue = { artist: "", album: "", year: "", genres: [] };
+const emptyMetadata: MetadataValue = {
+  artist: "",
+  album: "",
+  year: "",
+  genres: [],
+  featuredArtists: [],
+};
 
-export default function UploadDialog({ account, artists = [], albums = [], allGenres = [], onClose, onUploaded }: UploadDialogProps) {
+export default function UploadDialog({ account, artists = [], albums = [], allGenres = [], covers = [], onClose, onUploaded }: UploadDialogProps) {
   const [title, setTitle] = useState("");
   const [meta, setMeta] = useState<MetadataValue>(emptyMetadata);
   const [audio, setAudio] = useState<File | null>(null);
   const [artwork, setArtwork] = useState<File | null>(null);
+  const [artworkPath, setArtworkPath] = useState<string | null>(null);
   const [lyricsMode, setLyricsMode] = useState<"text" | "file">("text");
   const [lyricsText, setLyricsText] = useState("");
   const [lyrics, setLyrics] = useState<File | null>(null);
@@ -49,8 +59,10 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
       album: meta.album,
       year: Number.isFinite(parsedYear) ? parsedYear : null,
       genres: meta.genres,
+      featuredArtists: meta.featuredArtists,
       audio,
       artwork: artwork || undefined,
+      artworkPath: artworkPath || undefined,
       lyrics: lyricsMode === "file" ? lyrics || undefined : undefined,
       lyricsText: lyricsMode === "text" ? lyricsText || undefined : undefined,
       secondaryLyrics:
@@ -126,15 +138,16 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
           />
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs text-zinc-400">Artwork</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setArtwork(e.target.files?.[0] ?? null)}
-            className={fileClass}
-          />
-        </div>
+        <ArtworkField
+          covers={covers}
+          file={artwork}
+          onFileChange={setArtwork}
+          selectedPath={artworkPath}
+          onSelectPath={setArtworkPath}
+          album={meta.album}
+          inputClass={inputClass}
+          fileClass={fileClass}
+        />
 
         <div>
           <div className="mb-2 flex items-center justify-between">

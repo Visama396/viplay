@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { artistCredit } from "../lib/catalog";
 import type { PlaylistWithSongs, Song } from "../lib/types";
 
 interface PlaylistViewDialogProps {
@@ -24,6 +25,7 @@ export default function PlaylistViewDialog({
         (s) =>
           s.title.toLowerCase().includes(q) ||
           s.artist.toLowerCase().includes(q) ||
+          (s.featured_artists ?? []).some((a) => a.toLowerCase().includes(q)) ||
           (s.album ?? "").toLowerCase().includes(q) ||
           (s.genres ?? []).some((g) => g.toLowerCase().includes(q)),
       )
@@ -81,7 +83,7 @@ export default function PlaylistViewDialog({
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm text-zinc-200">{s.title}</div>
-                <div className="truncate text-xs text-zinc-500">{s.artist}</div>
+                <div className="truncate text-xs text-zinc-500">{artistCredit(s)}</div>
               </div>
               <button
                 onClick={() => onPlay([s], playlist)}

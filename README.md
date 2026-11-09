@@ -14,7 +14,9 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
   to Last Added until songs have been played)
 - Search across title, artist, album, and genre; genre filter chips; artist filter
 - Artist / album autocomplete comboboxes when uploading or editing (existing
-  entries are reused, new ones are created inline), plus album year and genres
+  entries are reused, new ones are created inline), plus album year, genres,
+  and optional featured artists for collaborations (shown as
+  "Artist feat. Guest")
 - Play / pause, previous / next, and seek
 - Queue management (play a single song within all songs, or a whole playlist)
 - Karaoke-style synced lyrics (LRC format, line-level and word-level
@@ -67,7 +69,7 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 ### 1. Database
 
 Run the files in `supabase/migrations/` **in order** in your Supabase SQL
-editor (`0001_init.sql`, then `0002`–`0015`). The early migrations create:
+editor (`0001_init.sql`, then `0002`–`0016`). The early migrations create:
 
 - `accounts`, `songs`, `playlists`, and `playlist_songs` tables
 - RLS policies (everything publicly readable except private playlists, which
@@ -93,6 +95,12 @@ Migration `0015_recent_plays.sql` adds the per-account `recent_plays` table
 synced across devices; guests keep the existing per-device `localStorage`
 list. Without this migration the app still works, but logged-in history won't
 sync across devices.
+
+Migration `0016_featured_artists.sql` adds `song_featured_artists`, the
+many-to-many link behind the "Featured artists" field in the upload/edit
+forms. Featured artists are catalog artists, so they are searchable and
+clickable like primary artists. Without this migration, songs save normally
+but the featured credits won't persist.
 
 > Existing accounts link to Supabase Auth on first login via the fake-email
 > trick. No email is required from the user.

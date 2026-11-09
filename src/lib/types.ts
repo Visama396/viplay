@@ -7,6 +7,10 @@ export interface Song {
   album_id: string | null;
   /** Genre names, attached client-side from song_genres. */
   genres?: string[];
+  /** Additional featured artist names, attached client-side (in credit order). */
+  featured_artists?: string[];
+  /** Catalog ids of the featured artists, attached client-side. */
+  featured_artist_ids?: string[];
   duration: number | null;
   audio_path: string;
   artwork_path: string | null;
@@ -60,4 +64,12 @@ export interface Genre {
   id: string;
   name: string;
   created_at: string;
+}
+
+/** An artwork file already in storage that can be reused as a song cover. */
+export interface ArtworkOption {
+  path: string;
+  title: string;
+  artist: string;
+  album: string | null;
 }

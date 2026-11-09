@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getPublicUrl, supabase } from "../lib/supabase";
+import { artistCredit } from "../lib/catalog";
 import type { Account } from "../lib/auth";
 import type { PlaylistWithSongs, Song } from "../lib/types";
 import LyricsViewer from "./LyricsViewer";
@@ -175,7 +176,7 @@ export default function Player({
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: song.title,
-        artist: song.artist,
+        artist: artistCredit(song),
         album: song.album ?? undefined,
         artwork: song.artwork_path
           ? [
@@ -189,7 +190,14 @@ export default function Player({
     } catch {
       // Older browsers: ignore.
     }
-  }, [song?.id, song?.title, song?.artist, song?.album, song?.artwork_path]);
+  }, [
+    song?.id,
+    song?.title,
+    song?.artist,
+    song?.featured_artists,
+    song?.album,
+    song?.artwork_path,
+  ]);
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
@@ -346,7 +354,7 @@ export default function Player({
             <div className="truncate text-sm font-semibold text-white">
               {song.title}
             </div>
-            <div className="truncate text-xs text-zinc-400">{song.artist}</div>
+            <div className="truncate text-xs text-zinc-400">{artistCredit(song)}</div>
             <div className="truncate text-[11px] tabular-nums text-zinc-500">
               {format(currentTime)} / {format(duration)}
             </div>
@@ -470,7 +478,7 @@ export default function Player({
               )}
               <div className="text-center">
                 <div className="truncate text-lg font-semibold text-white">{song.title}</div>
-                <div className="truncate text-sm text-zinc-400">{song.artist}</div>
+                <div className="truncate text-sm text-zinc-400">{artistCredit(song)}</div>
               </div>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Account } from "../lib/auth";
+import { artistCredit } from "../lib/catalog";
 import type { PlaylistWithSongs, Song } from "../lib/types";
 import {
   addSongToPlaylist,
@@ -59,7 +60,8 @@ export default function PlaylistDialog({
         !inPlaylist.has(s.id) &&
         (!q ||
           s.title.toLowerCase().includes(q) ||
-          s.artist.toLowerCase().includes(q)),
+          s.artist.toLowerCase().includes(q) ||
+          (s.featured_artists ?? []).some((a) => a.toLowerCase().includes(q))),
     );
   }, [songs, inPlaylist, addQuery]);
 
@@ -301,7 +303,7 @@ export default function PlaylistDialog({
                   >
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm text-zinc-200">{s.title}</div>
-                      <div className="truncate text-xs text-zinc-500">{s.artist}</div>
+                      <div className="truncate text-xs text-zinc-500">{artistCredit(s)}</div>
                     </div>
                     <button
                       onClick={() => handleRemove(s.id)}
@@ -333,7 +335,7 @@ export default function PlaylistDialog({
                 >
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm text-zinc-200">{s.title}</div>
-                    <div className="truncate text-xs text-zinc-500">{s.artist}</div>
+                    <div className="truncate text-xs text-zinc-500">{artistCredit(s)}</div>
                   </div>
                   <button
                     onClick={() => handleAdd(s.id)}

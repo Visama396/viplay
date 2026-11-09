@@ -1,5 +1,10 @@
 import { supabase } from "./supabase";
-import { ensureAlbum, ensureArtist, setSongGenres } from "./catalog";
+import {
+  ensureAlbum,
+  ensureArtist,
+  setSongFeaturedArtists,
+  setSongGenres,
+} from "./catalog";
 import type { Song } from "./types";
 
 export interface UploadInput {
@@ -10,8 +15,12 @@ export interface UploadInput {
   year?: number | null;
   /** Genre names to link (created if new). */
   genres?: string[];
+  /** Extra artist names to credit alongside the primary artist. */
+  featuredArtists?: string[];
   audio: File;
   artwork?: File;
+  /** Existing artwork path to reuse instead of uploading a new file. */
+  artworkPath?: string;
   lyrics?: File;
   /** Inline LRC text. Used when no lyrics file is provided. */
   lyricsText?: string;
@@ -91,6 +100,9 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
       await supabase.storage.from("audio").remove([audioPath]);
       return { error: `Could not upload artwork: ${artErr.message}` };
     }
+  } else if (input.artworkPath) {
+    // Reuse a cover already in storage instead of storing a duplicate.
+    artworkPath = input.artworkPath;
   }
 
   let lyricsPath: string | null = null;
@@ -199,6 +211,13 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
     await setSongGenres((data as Song).id, input.genres);
   }
 
+  const featuredArtists = (input.featuredArtists ?? [])
+    .map((name) => name.trim())
+    .filter((name) => name && name.toLowerCase() !== artist.toLowerCase());
+  if (data && featuredArtists.length > 0) {
+    await setSongFeaturedArtists((data as Song).id, featuredArtists);
+  }
+
   return { song: data as Song };
 }
 
@@ -210,7 +229,11 @@ export interface EditInput {
   year?: number | null;
   /** Genre names to set. Null/undefined leaves them unchanged. */
   genres?: string[] | null;
+  /** Featured artist names to set. Null/undefined leaves them unchanged. */
+  featuredArtists?: string[] | null;
   artwork?: File;
+  /** Existing artwork path to reuse. Undefined leaves it unchanged. */
+  artworkPath?: string;
   lyrics?: File;
   /** Inline LRC text. Empty string clears lyrics; null/undefined leaves them unchanged. */
   lyricsText?: string | null;
@@ -273,6 +296,13 @@ export async function updateSong(
       .from("artwork")
       .upload(artworkPath, input.artwork, { upsert: false, contentType: contentType(input.artwork) });
     if (artErr) return { error: `Could not upload artwork: ${artErr.message}` };
+    if (oldArtworkPath && oldArtworkPath !== artworkPath) {
+      replacedArtwork.push({ bucket: "artwork", oldPath: oldArtworkPath });
+    }
+  } else if (input.artworkPath) {
+    // Reuse an existing cover. The old object is only removed if no other
+    // song still points at it (checked after the row update below).
+    artworkPath = input.artworkPath;
     if (oldArtworkPath && oldArtworkPath !== artworkPath) {
       replacedArtwork.push({ bucket: "artwork", oldPath: oldArtworkPath });
     }
@@ -434,9 +464,25 @@ export async function updateSong(
     await setSongGenres(songId, input.genres);
   }
 
+  if (input.featuredArtists != null) {
+    const featuredArtists = input.featuredArtists
+      .map((name) => name.trim())
+      .filter((name) => name && name.toLowerCase() !== artist.toLowerCase());
+    await setSongFeaturedArtists(songId, featuredArtists);
+  }
+
   // Row now points at the new objects (or no lyrics); old ones are garbage.
   // Best-effort: a cleanup failure must not fail the save.
-  for (const r of replacedArtwork) {    const { error } = await supabase.storage.from(r.bucket).remove([r.oldPath]);
+  for (const r of replacedArtwork) {
+    // Covers can be shared by several songs, so only delete the old object
+    // when nothing else still references it. On a check failure, keep it:
+    // an orphan file is better than a broken cover.
+    const { count, error: refErr } = await supabase
+      .from("songs")
+      .select("id", { count: "exact", head: true })
+      .eq("artwork_path", r.oldPath);
+    if (refErr || (count ?? 0) > 0) continue;
+    const { error } = await supabase.storage.from(r.bucket).remove([r.oldPath]);
     if (error) console.warn(`Could not delete old artwork ${r.oldPath}: ${error.message}`);
   }
   for (const r of replacedLyrics) {

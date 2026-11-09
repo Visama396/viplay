@@ -7,6 +7,10 @@ export interface Catalog {
   genres: Genre[];
   /** song id -> genre names */
   songGenres: Map<string, string[]>;
+  /** song id -> featured artist names, in credit order */
+  songFeaturedArtists: Map<string, string[]>;
+  /** song id -> featured artist ids, in credit order */
+  songFeaturedArtistIds: Map<string, string[]>;
 }
 
 const emptyCatalog: Catalog = {
@@ -14,6 +18,8 @@ const emptyCatalog: Catalog = {
   albums: [],
   genres: [],
   songGenres: new Map(),
+  songFeaturedArtists: new Map(),
+  songFeaturedArtistIds: new Map(),
 };
 
 /**
@@ -23,11 +29,13 @@ const emptyCatalog: Catalog = {
  */
 export async function fetchCatalog(): Promise<Catalog> {
   try {
-    const [artistsRes, albumsRes, genresRes, linksRes] = await Promise.all([
+    const [artistsRes, albumsRes, genresRes, linksRes, featuredRes] = await Promise.all([
       supabase.from("artists").select("*").order("name"),
       supabase.from("albums").select("*").order("title"),
       supabase.from("genres").select("*").order("name"),
       supabase.from("song_genres").select("song_id, genre_id"),
+      // Optional: tolerant of 0016 not being applied yet.
+      supabase.from("song_featured_artists").select("song_id, artist_id, position"),
     ]);
     if (artistsRes.error || albumsRes.error || genresRes.error || linksRes.error) {
       return emptyCatalog;
@@ -36,6 +44,7 @@ export async function fetchCatalog(): Promise<Catalog> {
     const albums: Album[] = albumsRes.data ?? [];
     const genres: Genre[] = genresRes.data ?? [];
     const genreById = new Map(genres.map((g) => [g.id, g.name]));
+    const artistById = new Map(artists.map((a) => [a.id, a.name]));
     const songGenres = new Map<string, string[]>();
     for (const link of (linksRes.data ?? []) as Array<{ song_id: string; genre_id: string }>) {
       const name = genreById.get(link.genre_id);
@@ -44,7 +53,36 @@ export async function fetchCatalog(): Promise<Catalog> {
       list.push(name);
       songGenres.set(link.song_id, list);
     }
-    return { artists, albums, genres, songGenres };
+
+    const songFeaturedArtists = new Map<string, string[]>();
+    const songFeaturedArtistIds = new Map<string, string[]>();
+    if (!featuredRes.error) {
+      const links = ((featuredRes.data ?? []) as Array<{
+        song_id: string;
+        artist_id: string;
+        position: number;
+      }>).sort((a, b) => a.position - b.position);
+      for (const link of links) {
+        const idList = songFeaturedArtistIds.get(link.song_id) ?? [];
+        idList.push(link.artist_id);
+        songFeaturedArtistIds.set(link.song_id, idList);
+
+        const name = artistById.get(link.artist_id);
+        if (!name) continue;
+        const nameList = songFeaturedArtists.get(link.song_id) ?? [];
+        nameList.push(name);
+        songFeaturedArtists.set(link.song_id, nameList);
+      }
+    }
+
+    return {
+      artists,
+      albums,
+      genres,
+      songGenres,
+      songFeaturedArtists,
+      songFeaturedArtistIds,
+    };
   } catch {
     return emptyCatalog;
   }
@@ -75,6 +113,19 @@ export function artistDisplayName(
 ): string {
   if (!song.artist_id) return song.artist;
   return names.get(song.artist_id) ?? song.artist;
+}
+
+/**
+ * The full artist credit for a song, e.g. "Artist feat. Guest One, Guest Two".
+ * Featured names are attached client-side by fetchCatalog().
+ */
+export function artistCredit(
+  song: Pick<Song, "artist" | "featured_artists">,
+): string {
+  const featured = (song.featured_artists ?? [])
+    .map((name) => name.trim())
+    .filter(Boolean);
+  return featured.length > 0 ? `${song.artist} feat. ${featured.join(", ")}` : song.artist;
 }
 
 /** Finds an existing artist (case-insensitive) or creates it. Null on failure. */
@@ -174,6 +225,39 @@ export async function setSongGenres(songId: string, names: string[]): Promise<vo
       .insert(ids.map((genre_id) => ({ song_id: songId, genre_id })));
   } catch {
     // Catalog is best-effort; the song row itself is already saved.
+  }
+}
+
+/** Replaces a song's featured-artist links. No-op on failure. */
+export async function setSongFeaturedArtists(
+  songId: string,
+  names: string[],
+): Promise<void> {
+  try {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const name of names) {
+      const clean = name.trim();
+      if (!clean) continue;
+      const key = clean.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const id = await ensureArtist(clean);
+      if (id && !ids.includes(id)) ids.push(id);
+    }
+    const { error: delErr } = await supabase
+      .from("song_featured_artists")
+      .delete()
+      .eq("song_id", songId);
+    if (delErr) return;
+    if (ids.length === 0) return;
+    await supabase
+      .from("song_featured_artists")
+      .insert(
+        ids.map((artist_id, position) => ({ song_id: songId, artist_id, position })),
+      );
+  } catch {
+    // Catalog links are best-effort; the song row itself is already saved.
   }
 }
 

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { getPublicUrl } from "../lib/supabase";
+import { artistCredit } from "../lib/catalog";
 import type { Account } from "../lib/auth";
 import type { Artist, PlaylistWithSongs, Song } from "../lib/types";
 import { isPlaylistOwner } from "../lib/playlists";
@@ -55,21 +56,51 @@ export default function Home({
   const [genre, setGenre] = useState<string | null>(null);
   const [artistKey, setArtistKey] = useState<string | null>(null);
 
-  const songArtistKey = (s: Song) =>
+  const primaryArtistKey = (s: Song) =>
     s.artist_id ? `id:${s.artist_id}` : `text:${s.artist.trim().toLowerCase()}`;
+
+  // Every artist credited on a song (primary + featured), so clicking any of
+  // them shows collaborations too.
+  const songArtistKeys = (s: Song) => {
+    const keys = [primaryArtistKey(s)];
+    const featuredIds = s.featured_artist_ids ?? [];
+    if (featuredIds.length > 0) {
+      for (const id of featuredIds) keys.push(`id:${id}`);
+    } else {
+      for (const name of s.featured_artists ?? []) {
+        if (name.trim()) keys.push(`text:${name.trim().toLowerCase()}`);
+      }
+    }
+    return [...new Set(keys)];
+  };
 
   // Unified artist list: catalog artists plus any free-text artist on songs
   // without a catalog row yet (e.g. before the 0011 migration is run).
   const artistEntries = (() => {
+    const artistById = new Map(artists.map((a) => [a.id, a.name]));
+    const previewByKey = new Map<string, string>();
+    for (const s of songs) {
+      previewByKey.set(primaryArtistKey(s), s.artist);
+      for (const name of s.featured_artists ?? []) {
+        if (name.trim()) previewByKey.set(`text:${name.trim().toLowerCase()}`, name);
+      }
+      for (const id of s.featured_artist_ids ?? []) {
+        previewByKey.set(`id:${id}`, artistById.get(id) ?? "");
+      }
+    }
+
     const counts = new Map<string, { name: string; count: number }>();
     for (const s of songs) {
-      const key = songArtistKey(s);
-      const entry = counts.get(key) ?? { name: s.artist, count: 0 };
-      entry.count += 1;
-      if (s.artist_id) {
-        entry.name = artists.find((a) => a.id === s.artist_id)?.name ?? s.artist;
+      for (const key of songArtistKeys(s)) {
+        const fallback = previewByKey.get(key) ?? s.artist;
+        const name = key.startsWith("id:")
+          ? (artistById.get(key.slice(3)) ?? fallback)
+          : fallback;
+        const entry = counts.get(key) ?? { name, count: 0 };
+        entry.count += 1;
+        entry.name = name;
+        counts.set(key, entry);
       }
-      counts.set(key, entry);
     }
     return [...counts.entries()]
       .map(([key, v]) => ({ key, ...v }))
@@ -85,12 +116,13 @@ export default function Home({
     ) {
       return false;
     }
-    if (artistKey && songArtistKey(s) !== artistKey) return false;
+    if (artistKey && !songArtistKeys(s).includes(artistKey)) return false;
     if (!query) return true;
     const q = query.toLowerCase();
     return (
       s.title.toLowerCase().includes(q) ||
       s.artist.toLowerCase().includes(q) ||
+      (s.featured_artists ?? []).some((a) => a.toLowerCase().includes(q)) ||
       (s.album ?? "").toLowerCase().includes(q) ||
       (s.genres ?? []).some((g) => g.toLowerCase().includes(q))
     );
@@ -499,7 +531,7 @@ export default function Home({
                     <div className="truncate text-sm font-semibold text-zinc-100">
                       {song.title}
                     </div>
-                    <div className="truncate text-xs text-zinc-400">{song.artist}</div>
+                    <div className="truncate text-xs text-zinc-400">{artistCredit(song)}</div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {isAdmin && (
@@ -666,7 +698,7 @@ function RailCard({
       <div className="mt-2 truncate text-sm font-semibold text-zinc-100">
         {song.title}
       </div>
-      <div className="truncate text-xs text-zinc-400">{song.artist}</div>
+      <div className="truncate text-xs text-zinc-400">{artistCredit(song)}</div>
       {plays != null && plays > 0 && (
         <div className="truncate text-[11px] text-zinc-500">
           {plays} play{plays === 1 ? "" : "s"}

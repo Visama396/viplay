@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchLyrics, updateSong } from "../lib/upload";
-import type { Album, Artist, Song } from "../lib/types";
+import type { Album, Artist, ArtworkOption, Song } from "../lib/types";
+import { ArtworkField } from "./ArtworkField";
 import { MetadataFields, type MetadataValue } from "./MetadataFields";
 
 interface EditSongDialogProps {
@@ -8,13 +9,15 @@ interface EditSongDialogProps {
   artists: Artist[];
   albums: Album[];
   allGenres: string[];
+  /** Uploaded covers available for reuse. */
+  covers?: ArtworkOption[];
   onClose: () => void;
   onSaved: () => void;
 }
 
 type LyricsMode = "text" | "file";
 
-export default function EditSongDialog({ song, artists = [], albums = [], allGenres = [], onClose, onSaved }: EditSongDialogProps) {
+export default function EditSongDialog({ song, artists = [], albums = [], allGenres = [], covers = [], onClose, onSaved }: EditSongDialogProps) {
   const [title, setTitle] = useState(song.title);
   const [meta, setMeta] = useState<MetadataValue>({
     artist: song.artist,
@@ -24,8 +27,10 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
         ? (albums.find((a) => a.id === song.album_id)?.year?.toString() ?? "")
         : "",
     genres: song.genres ?? [],
+    featuredArtists: song.featured_artists ?? [],
   });
   const [artwork, setArtwork] = useState<File | null>(null);
+  const [artworkPath, setArtworkPath] = useState<string | null>(null);
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>("text");
   const [lyricsText, setLyricsText] = useState("");
   const [lyricsFile, setLyricsFile] = useState<File | null>(null);
@@ -80,7 +85,9 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
       album: meta.album,
       year: meta.year.trim() === "" ? null : Number.isFinite(parsedYear) ? parsedYear : null,
       genres: meta.genres,
+      featuredArtists: meta.featuredArtists,
       artwork: artwork || undefined,
+      artworkPath: artworkPath || undefined,
       lyrics: lyricsMode === "file" ? lyricsFile || undefined : undefined,
       lyricsText: lyricsMode === "text" ? lyricsText : undefined,
       secondaryLyrics: secondaryMode === "file" ? secondaryFile || undefined : undefined,
@@ -141,18 +148,18 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
           inputClass={inputClass}
         />
 
-        <div>
-          <label className="mb-1 block text-xs text-zinc-400">Artwork (replace)</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setArtwork(e.target.files?.[0] ?? null)}
-            className={fileClass}
-          />
-          {song.artwork_path && !artwork && (
-            <p className="mt-1 text-xs text-zinc-500">Current artwork will be kept.</p>
-          )}
-        </div>
+        <ArtworkField
+          covers={covers}
+          file={artwork}
+          onFileChange={setArtwork}
+          selectedPath={artworkPath}
+          onSelectPath={setArtworkPath}
+          currentPath={song.artwork_path}
+          album={meta.album}
+          label="Artwork (replace)"
+          inputClass={inputClass}
+          fileClass={fileClass}
+        />
 
         <div>
           <div className="mb-2 flex items-center justify-between">

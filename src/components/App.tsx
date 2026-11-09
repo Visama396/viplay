@@ -239,6 +239,8 @@ export default function App() {
           ...s,
           artist: artistDisplayName(s, artistNames),
           genres: catalog.songGenres.get(s.id) ?? [],
+          featured_artists: catalog.songFeaturedArtists.get(s.id) ?? [],
+          featured_artist_ids: catalog.songFeaturedArtistIds.get(s.id) ?? [],
         }));
         const songById = new Map(resolvedSongs.map((s) => [s.id, s]));
 
