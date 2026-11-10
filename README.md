@@ -17,6 +17,8 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
   entries are reused, new ones are created inline), plus album year, genres,
   and optional featured artists for collaborations (shown as
   "Artist feat. Guest")
+- Reuse an already uploaded cover when adding or editing a song, so tracks
+  from the same album can share one artwork file instead of duplicating it
 - Play / pause, previous / next, and seek
 - Queue management (play a single song within all songs, or a whole playlist)
 - Karaoke-style synced lyrics (LRC format, line-level and word-level
@@ -55,6 +57,7 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
     │   ├── PlaylistDialog.tsx # create / edit playlist (logged-in users)
     │   ├── Home.tsx          # browse songs & playlists
     │   ├── MetadataFields.tsx  # artist/album/year/genre inputs (upload + edit)
+    │   ├── ArtworkField.tsx    # artwork upload or reuse an existing cover
     │   ├── ui/combobox.tsx     # autocomplete combobox (cmdk-powered)
     │   ├── ui/skeleton.tsx     # skeleton placeholder
     │   ├── Player.tsx        # audio element + controls
@@ -69,7 +72,7 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 ### 1. Database
 
 Run the files in `supabase/migrations/` **in order** in your Supabase SQL
-editor (`0001_init.sql`, then `0002`–`0016`). The early migrations create:
+editor (`0001_init.sql`, then `0002`–`0017`). The early migrations create:
 
 - `accounts`, `songs`, `playlists`, and `playlist_songs` tables
 - RLS policies (everything publicly readable except private playlists, which
@@ -101,6 +104,10 @@ many-to-many link behind the "Featured artists" field in the upload/edit
 forms. Featured artists are catalog artists, so they are searchable and
 clickable like primary artists. Without this migration, songs save normally
 but the featured credits won't persist.
+
+Migration `0017_shared_artwork_cleanup.sql` updates the `delete_song` RPC so
+deleting a song does not remove an artwork file that other songs still reuse
+as their cover.
 
 > Existing accounts link to Supabase Auth on first login via the fake-email
 > trick. No email is required from the user.
@@ -144,7 +151,9 @@ Logged-in users can also upload songs directly from the app via the **Upload**
 button in the header (audio required; artwork and lyrics optional, as a file
 or pasted LRC text). This runs client-side with the anon key. Songs uploaded
 this way record the uploading account in `songs.uploaded_by`, and lyric edits
-reuse the same storage object so no orphan files pile up.
+reuse the same storage object so no orphan files pile up. Artwork can also be
+reused from any existing song: the new row points at the same storage object,
+and replacing a cover only deletes the old file once no other song uses it.
 
 ### 4. Run
 

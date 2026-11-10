@@ -90,6 +90,9 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
   if (audioErr) return { error: `Could not upload audio: ${audioErr.message}` };
 
   let artworkPath: string | null = null;
+  // Reused covers belong to other songs, so only remove files this upload
+  // actually created if a later step fails.
+  let uploadedArtwork = false;
   if (input.artwork) {
     const ext = (input.artwork.name.split(".").pop() || "jpg").toLowerCase();
     artworkPath = `${base}-art.${ext}`;
@@ -100,6 +103,7 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
       await supabase.storage.from("audio").remove([audioPath]);
       return { error: `Could not upload artwork: ${artErr.message}` };
     }
+    uploadedArtwork = true;
   } else if (input.artworkPath) {
     // Reuse a cover already in storage instead of storing a duplicate.
     artworkPath = input.artworkPath;
@@ -113,7 +117,7 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
       .upload(lyricsPath, input.lyrics, { upsert: false, contentType: contentType(input.lyrics) });
     if (lyrErr) {
       await supabase.storage.from("audio").remove([audioPath]);
-      if (artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
+      if (uploadedArtwork && artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
       return { error: `Could not upload lyrics: ${lyrErr.message}` };
     }
   } else if (input.lyricsText?.trim()) {
@@ -127,7 +131,7 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
       );
     if (lyrErr) {
       await supabase.storage.from("audio").remove([audioPath]);
-      if (artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
+      if (uploadedArtwork && artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
       return { error: `Could not save lyrics: ${lyrErr.message}` };
     }
   }
@@ -144,7 +148,7 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
       });
     if (altErr) {
       await supabase.storage.from("audio").remove([audioPath]);
-      if (artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
+      if (uploadedArtwork && artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
       if (lyricsPath) await supabase.storage.from("lyrics").remove([lyricsPath]);
       return { error: `Could not upload secondary lyrics: ${altErr.message}` };
     }
@@ -160,7 +164,7 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
       );
     if (altErr) {
       await supabase.storage.from("audio").remove([audioPath]);
-      if (artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
+      if (uploadedArtwork && artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
       if (lyricsPath) await supabase.storage.from("lyrics").remove([lyricsPath]);
       return { error: `Could not save secondary lyrics: ${altErr.message}` };
     }
@@ -201,7 +205,7 @@ export async function uploadSong(input: UploadInput): Promise<UploadResult> {
 
   if (error) {
     await supabase.storage.from("audio").remove([audioPath]);
-    if (artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
+    if (uploadedArtwork && artworkPath) await supabase.storage.from("artwork").remove([artworkPath]);
     if (lyricsPath) await supabase.storage.from("lyrics").remove([lyricsPath]);
     if (secondaryLyricsPath) await supabase.storage.from("lyrics").remove([secondaryLyricsPath]);
     return { error: `Could not save song: ${error.message}` };
@@ -289,6 +293,9 @@ export async function updateSong(
   const removedLyrics: string[] = [];
 
   let artworkPath: string | null = song.artwork_path;
+  // Only a file uploaded by this edit may be cleaned up if a later step
+  // fails; a reused cover belongs to other songs too.
+  let uploadedArtwork = false;
   if (input.artwork) {
     const ext = (input.artwork.name.split(".").pop() || "jpg").toLowerCase();
     artworkPath = `${base}-art.${ext}`;
@@ -296,6 +303,7 @@ export async function updateSong(
       .from("artwork")
       .upload(artworkPath, input.artwork, { upsert: false, contentType: contentType(input.artwork) });
     if (artErr) return { error: `Could not upload artwork: ${artErr.message}` };
+    uploadedArtwork = true;
     if (oldArtworkPath && oldArtworkPath !== artworkPath) {
       replacedArtwork.push({ bucket: "artwork", oldPath: oldArtworkPath });
     }
@@ -308,6 +316,12 @@ export async function updateSong(
     }
   }
 
+  /** Removes an artwork object uploaded by this edit (never a reused cover). */
+  async function removeNewArtwork() {
+    if (!uploadedArtwork || !artworkPath || artworkPath === oldArtworkPath) return;
+    await supabase.storage.from("artwork").remove([artworkPath]);
+  }
+
   let lyricsPath: string | null = song.lyrics_path;
   if (input.lyrics) {
     lyricsPath = `${base}.lrc`;
@@ -315,7 +329,7 @@ export async function updateSong(
       .from("lyrics")
       .upload(lyricsPath, input.lyrics, { upsert: false, contentType: contentType(input.lyrics) });
     if (lyrErr) {
-      if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+      await removeNewArtwork();
       return { error: `Could not upload lyrics: ${lyrErr.message}` };
     }
     if (oldLyricsPath && oldLyricsPath !== lyricsPath) {
@@ -342,7 +356,7 @@ export async function updateSong(
           { upsert: false, contentType: "text/plain" },
         );
       if (lyrErr) {
-        if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+        await removeNewArtwork();
         return { error: `Could not save lyrics: ${lyrErr.message}` };
       }
       lyricsPath = name;
@@ -357,7 +371,7 @@ export async function updateSong(
           { upsert: false, contentType: "text/plain" },
         );
       if (lyrErr) {
-        if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+        await removeNewArtwork();
         return { error: `Could not save lyrics: ${lyrErr.message}` };
       }
       lyricsPath = name;
@@ -389,7 +403,7 @@ export async function updateSong(
       .from("lyrics")
       .upload(name, input.secondaryLyrics, { upsert: false, contentType: contentType(input.secondaryLyrics) });
     if (altErr) {
-      if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+      await removeNewArtwork();
       if (lyricsPath && lyricsPath !== song.lyrics_path) await supabase.storage.from("lyrics").remove([lyricsPath]);
       return { error: `Could not upload secondary lyrics: ${altErr.message}` };
     }
@@ -406,7 +420,7 @@ export async function updateSong(
     } else {
       const res = await uploadSecondaryBlob(input.secondaryLyricsText);
       if (res.error) {
-        if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+        await removeNewArtwork();
         if (lyricsPath && lyricsPath !== song.lyrics_path) await supabase.storage.from("lyrics").remove([lyricsPath]);
         return { error: res.error };
       }
@@ -454,7 +468,7 @@ export async function updateSong(
     .eq("id", songId);
 
   if (updateErr) {
-    if (artworkPath && artworkPath !== song.artwork_path) await supabase.storage.from("artwork").remove([artworkPath]);
+    await removeNewArtwork();
     if (lyricsPath && lyricsPath !== song.lyrics_path) await supabase.storage.from("lyrics").remove([lyricsPath]);
     if (secondaryPath && secondaryPath !== oldSecondaryPath) await supabase.storage.from("lyrics").remove([secondaryPath]);
     return { error: `Could not save song: ${updateErr.message}` };

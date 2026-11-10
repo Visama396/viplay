@@ -24,7 +24,15 @@ import {
 import { addSongToPlaylist, copyPlaylist, isPlaylistOwner } from "../lib/playlists";
 import type { Account } from "../lib/auth";
 import { getCurrentAccount, logout } from "../lib/auth";
-import type { Album, Artist, Playlist, PlaylistSong, PlaylistWithSongs, Song } from "../lib/types";
+import type {
+  Album,
+  Artist,
+  ArtworkOption,
+  Playlist,
+  PlaylistSong,
+  PlaylistWithSongs,
+  Song,
+} from "../lib/types";
 
 export default function App() {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -325,6 +333,29 @@ export default function App() {
 
   const playerOpen = view === "player" && queue.length > 0 && currentIndex >= 0;
 
+  // Deduped covers available for reuse (several songs often share one album
+  // cover). Sorted so covers from the same album sit together.
+  const coverOptions: ArtworkOption[] = (() => {
+    const seen = new Set<string>();
+    const options: ArtworkOption[] = [];
+    for (const s of songs) {
+      if (!s.artwork_path || seen.has(s.artwork_path)) continue;
+      seen.add(s.artwork_path);
+      options.push({
+        path: s.artwork_path,
+        title: s.title,
+        artist: s.artist,
+        album: s.album,
+      });
+    }
+    return options.sort(
+      (a, b) =>
+        (a.album ?? "").localeCompare(b.album ?? "") ||
+        a.artist.localeCompare(b.artist) ||
+        a.title.localeCompare(b.title),
+    );
+  })();
+
   return (
     <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] flex-col overflow-hidden bg-zinc-950 text-zinc-100">
       {!playerOpen && (
@@ -394,6 +425,7 @@ export default function App() {
               artists={artists}
               albums={albums}
               allGenres={allGenres}
+              covers={coverOptions}
               onClose={closeUpload}
               onUploaded={afterUpload}
             />
@@ -452,6 +484,7 @@ export default function App() {
               artists={artists}
               albums={albums}
               allGenres={allGenres}
+              covers={coverOptions}
               onClose={closeEdit}
               onSaved={afterEdit}
             />
