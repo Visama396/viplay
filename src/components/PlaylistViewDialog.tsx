@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { artistCredit } from "../lib/catalog";
 import type { PlaylistWithSongs, Song } from "../lib/types";
 
@@ -17,24 +16,12 @@ export default function PlaylistViewDialog({
   currentSongId,
   isPlaying = false,
 }: PlaylistViewDialogProps) {
-  const [query, setQuery] = useState("");
-
-  const q = query.trim().toLowerCase();
-  const songs = q
-    ? playlist.songs.filter(
-        (s) =>
-          s.title.toLowerCase().includes(q) ||
-          s.artist.toLowerCase().includes(q) ||
-          (s.featured_artists ?? []).some((a) => a.toLowerCase().includes(q)) ||
-          (s.album ?? "").toLowerCase().includes(q) ||
-          (s.genres ?? []).some((g) => g.toLowerCase().includes(q)),
-      )
-    : playlist.songs;
+  const songs = playlist.songs;
 
   const isCurrentSong = (id: string) => id === currentSongId;
 
   return (
-    <div className="flex max-h-80 flex-col rounded-2xl bg-zinc-950 p-4 sm:p-6">
+    <div className="flex max-h-80 flex-col rounded-2xl bg-black/90 p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-bold text-white">{playlist.name}</h2>
@@ -53,13 +40,6 @@ export default function PlaylistViewDialog({
         </button>
       </div>
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search songs..."
-        className="mb-4 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition-colors focus:border-rose-500"
-      />
-
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-zinc-200">Songs ({songs.length})</h3>
         {songs.length > 0 && (
@@ -73,9 +53,9 @@ export default function PlaylistViewDialog({
       </div>
 
       {songs.length === 0 ? (
-        <p className="py-8 text-center text-sm text-zinc-500">No songs found.</p>
+        <p className="py-8 text-center text-sm text-zinc-500">This playlist has no songs yet.</p>
       ) : (
-        <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+        <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-2">
           {songs.map((s) => (
             <li
               key={s.id}

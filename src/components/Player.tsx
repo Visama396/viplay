@@ -7,6 +7,22 @@ import LyricsViewer from "./LyricsViewer";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PlaylistViewDialog from "./PlaylistViewDialog";
 
+const VOLUME_STORAGE_KEY = "viplay.volume";
+const DEFAULT_VOLUME = 0.5;
+
+/** Reads the persisted volume, falling back to 50% on first visit. */
+function readSavedVolume(): number {
+  if (typeof window === "undefined") return DEFAULT_VOLUME;
+  try {
+    const raw = window.localStorage.getItem(VOLUME_STORAGE_KEY);
+    if (raw == null) return DEFAULT_VOLUME;
+    const saved = Number(raw);
+    return Number.isFinite(saved) ? Math.min(1, Math.max(0, saved)) : DEFAULT_VOLUME;
+  } catch {
+    return DEFAULT_VOLUME;
+  }
+}
+
 interface PlayerProps {
   queue: Song[];
   currentIndex: number;
@@ -55,7 +71,7 @@ export default function Player({
   const [duration, setDuration] = useState(0);
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [secondaryLyrics, setSecondaryLyrics] = useState<string | null>(null);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(readSavedVolume);
   const [loop, setLoop] = useState<0 | 1 | 2>(0); // 0 = off, 1 = song, 2 = playlist
 
   const song: Song | undefined = queue[currentIndex];
@@ -68,6 +84,11 @@ export default function Player({
   useEffect(() => {
     const audio = audioRef.current;
     if (audio) audio.volume = volume;
+    try {
+      window.localStorage.setItem(VOLUME_STORAGE_KEY, String(volume));
+    } catch {
+      // Storage unavailable (private mode, quota): volume still works per session.
+    }
   }, [volume]);
 
   useEffect(() => {
@@ -88,7 +109,16 @@ export default function Player({
   // React only to explicit play/pause state changes (user toggles). It must NOT
   // depend on song.id, otherwise a track change races this effect with the
   // auto-play above and causes rapid pause/resume stuttering.
+  //
+  // The initial run is skipped: the song effect above already starts playback
+  // for the first track, and pausing here with the initial `playing = false`
+  // would abort that pending play() so the first song never started.
+  const playingEffectMounted = useRef(false);
   useEffect(() => {
+    if (!playingEffectMounted.current) {
+      playingEffectMounted.current = true;
+      return;
+    }
     const audio = audioRef.current;
     if (!audio) return;
     if (playing) audio.play().catch(() => {});
