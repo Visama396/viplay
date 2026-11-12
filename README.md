@@ -69,50 +69,7 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 
 ## Setup
 
-### 1. Database
-
-Run the files in `supabase/migrations/` **in order** in your Supabase SQL
-editor (`0001_init.sql`, then `0002`–`0017`). The early migrations create:
-
-- `accounts`, `songs`, `playlists`, and `playlist_songs` tables
-- RLS policies (everything publicly readable except private playlists, which
-  only their creator sees; playlist writes restricted to the creator;
-  song deletion admin-only via RPC)
-- `ensure_account_link` and `delete_song` RPCs
-- `audio`, `artwork`, and `lyrics` public storage buckets (uploads, lyric/artwork
-  edits, and old-file cleanup allowed from the app)
-
-Migration `0011_catalog.sql` adds the catalog: `artists`, `albums`
-(with optional year), `genres` + `song_genres` (many-to-many), and
-`songs.artist_id` / `songs.album_id` links backfilled from the existing
-text columns. The app works without it (free-text fallback), but the
-autocomplete, grouping, and genre features need it.
-
-Migration `0012_play_counts.sql` adds `songs.play_count` and the
-`record_song_play` RPC. The app calls it whenever a track starts, and the
-home page ranks songs by the total. Without this migration the app still
-works, but the rail falls back to Last Added.
-
-Migration `0015_recent_plays.sql` adds the per-account `recent_plays` table
-(with owner-only RLS). Logged-in users get their "Recently listened" rail
-synced across devices; guests keep the existing per-device `localStorage`
-list. Without this migration the app still works, but logged-in history won't
-sync across devices.
-
-Migration `0016_featured_artists.sql` adds `song_featured_artists`, the
-many-to-many link behind the "Featured artists" field in the upload/edit
-forms. Featured artists are catalog artists, so they are searchable and
-clickable like primary artists. Without this migration, songs save normally
-but the featured credits won't persist.
-
-Migration `0017_shared_artwork_cleanup.sql` updates the `delete_song` RPC so
-deleting a song does not remove an artwork file that other songs still reuse
-as their cover.
-
-> Existing accounts link to Supabase Auth on first login via the fake-email
-> trick. No email is required from the user.
-
-### 2. Configuration
+### 1. Configuration
 
 Copy your Supabase URL and anon key into `.env`:
 
@@ -121,29 +78,6 @@ PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
 
-### 3. Add content
-
-Place files under `seed-assets/<song-folder>/` with an audio file, optional
-artwork, and an optional `.lrc` lyrics file. An optional `meta.json` may set
-`title`, `artist`, `album`, `album_year` (or `year`), `genre` (or `genres`
-array), and `duration`:
-
-```text
-seed-assets/
-  my-song/
-    audio.mp3
-    artwork.jpg
-    lyrics.lrc
-    meta.json     # optional: { "title": "...", "artist": "...", "album": "..." }
-```
-
-Then upload and insert rows (requires the **service role key**):
-
-```bash
-SUPABASE_URL=https://<project>.supabase.co \
-SUPABASE_SERVICE_ROLE_KEY=<service_role_key> \
-bun run scripts/seed.mjs
-```
 
 ### In-app uploads
 
@@ -155,7 +89,7 @@ reuse the same storage object so no orphan files pile up. Artwork can also be
 reused from any existing song: the new row points at the same storage object,
 and replacing a cover only deletes the old file once no other song uses it.
 
-### 4. Run
+### 2. Run
 
 ```bash
 bun install
