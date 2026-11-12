@@ -18,3 +18,27 @@
     transform: scaleY(1);
   }
 }
+
+@keyframes viplay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Vinyl artwork in the player: spins while the song plays, freezes on pause
+   and resumes from the same angle. */
+.viplay-vinyl-spin {
+  animation: viplay-spin 10s linear infinite;
+  animation-play-state: paused;
+  will-change: transform;
+}
+
+.viplay-vinyl-spin[data-playing="true"] {
+  animation-play-state: running;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viplay-vinyl-spin {
+    animation: none;
+  }
+}

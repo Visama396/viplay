@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getPublicUrl, supabase } from "../lib/supabase";
+import { getAudioContext } from "../lib/audio";
 import { artistCredit } from "../lib/catalog";
 import type { Account } from "../lib/auth";
 import type { PlaylistWithSongs, Song } from "../lib/types";
@@ -9,6 +10,13 @@ import PlaylistViewDialog from "./PlaylistViewDialog";
 
 const VOLUME_STORAGE_KEY = "viplay.volume";
 const DEFAULT_VOLUME = 0.5;
+
+/**
+ * A media element can only ever be attached to one MediaElementAudioSourceNode.
+ * Keeping the graph per element makes the analyser effect safe to re-run.
+ */
+type VinylGraph = { ctx: AudioContext; analyser: AnalyserNode };
+const vinylGraphs = new WeakMap<HTMLAudioElement, VinylGraph>();
 
 /** Reads the persisted volume, falling back to 50% on first visit. */
 function readSavedVolume(): number {
@@ -66,6 +74,8 @@ export default function Player({
   onRestart,
 }: PlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  /** Scales the vinyl. Driven imperatively at 60fps to avoid re-renders. */
+  const pulseRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -90,6 +100,95 @@ export default function Player({
       // Storage unavailable (private mode, quota): volume still works per session.
     }
   }, [volume]);
+
+  // Route the audio element through an AnalyserNode once, then scale the vinyl
+  // with the live bass energy so it pulses with the music. The element has
+  // crossOrigin="anonymous" (required for the analyser to see samples); the
+  // storage bucket replies with CORS `*`.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    let graph = vinylGraphs.get(audio);
+    if (!graph) {
+      try {
+        const source = ctx.createMediaElementSource(audio);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.5;
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+        graph = { ctx, analyser };
+        vinylGraphs.set(audio, graph);
+      } catch {
+        // Unsupported browser or tainted media: keep playing without a pulse.
+        return;
+      }
+    }
+
+    const { analyser } = graph;
+    const bins = new Uint8Array(analyser.frequencyBinCount);
+    const reduceMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+    // Autoplay policies suspend the context until a gesture; resume on the
+    // next interaction so routed audio is never silent.
+    const resume = () => {
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    };
+    audio.addEventListener("play", resume);
+    window.addEventListener("pointerdown", resume, true);
+
+    // 20–200 Hz covers the kick/bass that drives the visible pulse.
+    const binHz = ctx.sampleRate / 2 / analyser.frequencyBinCount;
+    const lo = Math.max(1, Math.floor(20 / binHz));
+    const hi = Math.min(analyser.frequencyBinCount - 1, Math.ceil(200 / binHz));
+
+    let raf = 0;
+    let last = performance.now();
+    let pulse = 1;
+    let bassAvg = 0;
+
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      const el = pulseRef.current;
+      if (!el) return;
+      const dt = Math.min(0.12, Math.max(0.001, (now - last) / 1000));
+      last = now;
+
+      if (reduceMotion || audio.paused || audio.readyState < 2) {
+        // Ease back to rest when paused or buffering.
+        pulse += (1 - pulse) * (1 - Math.exp(-dt * 10));
+        el.style.transform = `scale(${pulse.toFixed(4)})`;
+        return;
+      }
+
+      analyser.getByteFrequencyData(bins);
+      let sum = 0;
+      for (let i = lo; i <= hi; i++) sum += bins[i];
+      const bass = sum / ((hi - lo + 1) * 255);
+
+      // Slow loudness baseline; energy above it is a beat/transient.
+      bassAvg += (bass - bassAvg) * (1 - Math.exp(-dt * 2.5));
+      const emphasis =
+        Math.max(0, bass - bassAvg) / Math.max(0.08, 1 - bassAvg);
+
+      const target = 1 + Math.min(0.1, emphasis * 0.14);
+      // Punch fast on a beat, settle gently between beats.
+      const k = 1 - Math.exp(-dt * (target > pulse ? 26 : 6));
+      pulse += (target - pulse) * k;
+      el.style.transform = `scale(${pulse.toFixed(4)})`;
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      audio.removeEventListener("play", resume);
+      window.removeEventListener("pointerdown", resume, true);
+    };
+  }, []);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -341,6 +440,7 @@ export default function Player({
     <div className={compact ? "flex w-full flex-col" : "flex min-h-0 flex-1 flex-col"}>
       <audio
         ref={audioRef}
+        crossOrigin="anonymous"
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onEnded={handleEnded}
@@ -414,6 +514,31 @@ export default function Player({
               <path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" />
             </svg>
           </button>
+          {playlist && (
+            <Popover open={playlistOpen} onOpenChange={onPlaylistOpenChange}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="shrink-0 text-zinc-300 transition hover:text-white"
+                  aria-label={`View playlist ${playlist.name}`}
+                  title="View playlist songs"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h12v2H3v-2z" />
+                  </svg>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top">
+                <PlaylistViewDialog
+                  playlist={playlist}
+                  onPlay={onPlay}
+                  onOpenChange={onPlaylistOpenChange}
+                  currentSongId={song?.id ?? null}
+                  isPlaying={playing}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
           <button
             onClick={cycleLoop}
             className={`shrink-0 transition ${
@@ -498,13 +623,34 @@ export default function Player({
                 onSeek={seek}
               />
             </div>
-            <div className="hidden w-64 shrink-0 flex-col items-center justify-center gap-3 md:flex">
+            <div className="hidden w-64 shrink-0 flex-col items-center justify-center gap-4 md:flex">
               {song.artwork_path && (
-                <img
-                  src={getPublicUrl("artwork", song.artwork_path)}
-                  alt={`${song.title} artwork`}
-                  className="aspect-square w-full rounded-xl object-cover shadow-lg"
-                />
+                <div className="relative aspect-square w-[92%]">
+                  {/* Scales with the music (beat-driven, imperatively via rAF). */}
+                  <div ref={pulseRef} className="absolute inset-0 will-change-transform">
+                    {/* The disc and its center label spin together like a record.
+                        `key={song.id}` resets the rotation for each new track. */}
+                    <div
+                      key={song.id}
+                      data-playing={playing}
+                      className="viplay-vinyl-spin absolute inset-0 rounded-full shadow-2xl"
+                      style={{
+                        background:
+                          "repeating-radial-gradient(circle at 50% 50%, #18181b 0px, #09090b 2px, #18181b 3px, #09090b 5px)",
+                      }}
+                    >
+                      {/* Light sheen across the vinyl surface. */}
+                      <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.16),transparent_45%)]" />
+                      <img
+                        src={getPublicUrl("artwork", song.artwork_path)}
+                        alt={`${song.title} artwork`}
+                        className="absolute left-1/2 top-1/2 aspect-square w-[58%] -translate-x-1/2 -translate-y-1/2 rounded-full object-cover ring-2 ring-black/60"
+                      />
+                      {/* Spindle hole at the very center. */}
+                      <span className="absolute left-1/2 top-1/2 h-[6%] w-[6%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-950 ring-1 ring-white/20" />
+                    </div>
+                  </div>
+                </div>
               )}
               <div className="text-center">
                 <div className="truncate text-lg font-semibold text-white">{song.title}</div>

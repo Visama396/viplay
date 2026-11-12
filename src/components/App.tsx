@@ -7,6 +7,7 @@ import PlaylistDialog from "./PlaylistDialog";
 import AccountDialog from "./AccountDialog";
 import EditSongDialog from "./EditSongDialog";
 import { supabase } from "../lib/supabase";
+import { resumeAudioContext } from "../lib/audio";
 import { deleteSong } from "../lib/upload";
 import {
   artistDisplayName,
@@ -86,6 +87,19 @@ export default function App() {
     getCurrentAccount()
       .then((acc) => setAccount(acc))
       .catch(() => setAccount(null));
+  }, []);
+
+  // Unlock the shared AudioContext during a user gesture. Capture phase runs
+  // before the song/card click handlers, so the context is running before the
+  // player mounts and routes the <audio> element through the analyser.
+  useEffect(() => {
+    const unlock = () => resumeAudioContext();
+    window.addEventListener("pointerdown", unlock, true);
+    window.addEventListener("keydown", unlock, true);
+    return () => {
+      window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("keydown", unlock, true);
+    };
   }, []);
 
   // When signed in, load the account's history (merging this device's guest
