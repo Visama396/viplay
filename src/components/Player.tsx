@@ -105,6 +105,10 @@ export default function Player({
   // with the live bass energy so it pulses with the music. The element has
   // crossOrigin="anonymous" (required for the analyser to see samples); the
   // storage bucket replies with CORS `*`.
+  //
+  // `getAudioContext()` returns null on phones/tablets: routing a media element
+  // through Web Audio there would silence it once the app is backgrounded or
+  // the screen locks. The pulse is decorative, so playback wins.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
