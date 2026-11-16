@@ -494,6 +494,7 @@ export default function App() {
               artists={artists}
               albums={albums}
               allGenres={allGenres}
+              songs={songs}
               covers={coverOptions}
               onClose={closeUpload}
               onUploaded={afterUpload}
@@ -552,6 +553,7 @@ export default function App() {
               artists={artists}
               albums={albums}
               allGenres={allGenres}
+              songs={songs}
               covers={coverOptions}
               onClose={closeEdit}
               onSaved={afterEdit}

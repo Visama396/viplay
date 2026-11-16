@@ -9,6 +9,8 @@ interface EditSongDialogProps {
   artists: Artist[];
   albums: Album[];
   allGenres: string[];
+  /** Existing songs, used to suggest genres for the chosen artist/album. */
+  songs?: Song[];
   /** Uploaded covers available for reuse. */
   covers?: ArtworkOption[];
   onClose: () => void;
@@ -17,7 +19,7 @@ interface EditSongDialogProps {
 
 type LyricsMode = "text" | "file";
 
-export default function EditSongDialog({ song, artists = [], albums = [], allGenres = [], covers = [], onClose, onSaved }: EditSongDialogProps) {
+export default function EditSongDialog({ song, artists = [], albums = [], allGenres = [], songs = [], covers = [], onClose, onSaved }: EditSongDialogProps) {
   const [title, setTitle] = useState(song.title);
   const [meta, setMeta] = useState<MetadataValue>({
     artist: song.artist,
@@ -143,6 +145,8 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
           artists={artists}
           albums={albums}
           allGenres={allGenres}
+          songs={songs}
+          excludeSongId={song.id}
           value={meta}
           onChange={setMeta}
           inputClass={inputClass}

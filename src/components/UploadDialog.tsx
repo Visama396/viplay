@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Account } from "../lib/auth";
-import type { Album, Artist, ArtworkOption } from "../lib/types";
+import type { Album, Artist, ArtworkOption, Song } from "../lib/types";
 import { uploadSong } from "../lib/upload";
 import { ArtworkField } from "./ArtworkField";
 import { MetadataFields, type MetadataValue } from "./MetadataFields";
@@ -10,6 +10,8 @@ interface UploadDialogProps {
   artists: Artist[];
   albums: Album[];
   allGenres: string[];
+  /** Existing songs, used to suggest genres for the chosen artist/album. */
+  songs?: Song[];
   /** Uploaded covers available for reuse. */
   covers?: ArtworkOption[];
   onClose: () => void;
@@ -24,7 +26,7 @@ const emptyMetadata: MetadataValue = {
   featuredArtists: [],
 };
 
-export default function UploadDialog({ account, artists = [], albums = [], allGenres = [], covers = [], onClose, onUploaded }: UploadDialogProps) {
+export default function UploadDialog({ account, artists = [], albums = [], allGenres = [], songs = [], covers = [], onClose, onUploaded }: UploadDialogProps) {
   const [title, setTitle] = useState("");
   const [meta, setMeta] = useState<MetadataValue>(emptyMetadata);
   const [audio, setAudio] = useState<File | null>(null);
@@ -122,6 +124,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
           artists={artists}
           albums={albums}
           allGenres={allGenres}
+          songs={songs}
           value={meta}
           onChange={setMeta}
           inputClass={inputClass}

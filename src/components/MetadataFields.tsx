@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Album, Artist } from "../lib/types";
+import type { Album, Artist, Song } from "../lib/types";
 import { Combobox } from "./ui/combobox";
 
 export interface MetadataValue {
@@ -15,6 +15,10 @@ interface MetadataFieldsProps {
   artists: Artist[];
   albums: Album[];
   allGenres: string[];
+  /** Existing catalog songs, used to suggest genres for the selected artist/album. */
+  songs?: Song[];
+  /** Song being edited, excluded from its own genre suggestions. */
+  excludeSongId?: string;
   value: MetadataValue;
   onChange: (value: MetadataValue) => void;
   inputClass: string;
@@ -30,6 +34,8 @@ export function MetadataFields({
   artists = [],
   albums = [],
   allGenres = [],
+  songs = [],
+  excludeSongId,
   value,
   onChange,
   inputClass,
@@ -84,9 +90,77 @@ export function MetadataFields({
     set({ genres: [...value.genres, clean] });
   }
 
+  function addGenres(names: string[]) {
+    const next = [...value.genres];
+    for (const name of names) {
+      const clean = name.trim();
+      if (!clean) continue;
+      if (next.some((g) => g.toLowerCase() === clean.toLowerCase())) continue;
+      next.push(clean);
+    }
+    set({ genres: next });
+  }
+
   function removeGenre(name: string) {
     set({ genres: value.genres.filter((g) => g !== name) });
   }
+
+  // Genres already used by this artist's catalog songs. Album matches are
+  // ranked above the artist's other releases, and every suggestion is added
+  // only when the user clicks it (unlike the album year, which is exact).
+  const pool = songs.filter((s) => s.id !== excludeSongId);
+  const artistSongs = value.artist.trim()
+    ? pool.filter(
+        (s) =>
+          (matchedArtist ? s.artist_id === matchedArtist.id : false) ||
+          sameName(s.artist, value.artist),
+      )
+    : [];
+  const albumSongIds = new Set(
+    value.album.trim()
+      ? artistSongs
+          .filter((s) => s.album && sameName(s.album, value.album))
+          .map((s) => s.id)
+      : [],
+  );
+
+  const genreScores = new Map<
+    string,
+    { name: string; albumCount: number; artistCount: number }
+  >();
+  for (const song of artistSongs) {
+    const inAlbum = albumSongIds.has(song.id);
+    for (const genre of song.genres ?? []) {
+      const clean = genre.trim();
+      if (!clean) continue;
+      const key = clean.toLowerCase();
+      const entry = genreScores.get(key) ?? {
+        name: clean,
+        albumCount: 0,
+        artistCount: 0,
+      };
+      entry.artistCount += 1;
+      if (inAlbum) entry.albumCount += 1;
+      genreScores.set(key, entry);
+    }
+  }
+
+  const suggestions = [...genreScores.values()]
+    .filter((g) => !value.genres.some((v) => v.toLowerCase() === g.name.toLowerCase()))
+    .sort(
+      (a, b) =>
+        b.albumCount - a.albumCount ||
+        b.artistCount - a.artistCount ||
+        a.name.localeCompare(b.name),
+    )
+    .slice(0, 8);
+
+  const suggestionSource =
+    albumSongIds.size > 0
+      ? "from other songs in this album"
+      : artistSongs.length > 0
+        ? "from this artist's songs"
+        : "";
 
   return (
     <>
@@ -201,6 +275,46 @@ export function MetadataFields({
           />
         </div>
       </div>
+
+      {suggestions.length > 0 && (
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <p className="text-xs text-zinc-500">
+              Suggested genres{" "}
+              <span className="text-zinc-600">({suggestionSource})</span>
+            </p>
+            {suggestions.length > 1 && (
+              <button
+                type="button"
+                onClick={() => addGenres(suggestions.map((g) => g.name))}
+                className="shrink-0 text-xs text-rose-400 transition hover:text-rose-300"
+              >
+                Add all
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((g) => (
+              <button
+                key={g.name}
+                type="button"
+                onClick={() => addGenre(g.name)}
+                className="group flex items-center gap-1 rounded-full border border-dashed border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-rose-500/60 hover:text-white"
+              >
+                <span className="text-zinc-500 transition group-hover:text-rose-400">
+                  +
+                </span>
+                {g.name}
+                {g.artistCount > 1 && (
+                  <span className="text-[10px] text-zinc-500">
+                    {g.artistCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {value.genres.length > 0 && (
         <div className="flex flex-wrap gap-2">
