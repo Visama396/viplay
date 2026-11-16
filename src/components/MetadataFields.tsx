@@ -19,6 +19,8 @@ interface MetadataFieldsProps {
   songs?: Song[];
   /** Song being edited, excluded from its own genre suggestions. */
   excludeSongId?: string;
+  /** Called with an existing cover path when the chosen album already has one. */
+  onReuseCover?: (path: string) => void;
   value: MetadataValue;
   onChange: (value: MetadataValue) => void;
   inputClass: string;
@@ -36,6 +38,7 @@ export function MetadataFields({
   allGenres = [],
   songs = [],
   excludeSongId,
+  onReuseCover,
   value,
   onChange,
   inputClass,
@@ -71,10 +74,10 @@ export function MetadataFields({
   const matchedArtist = artists.find(
     (a) => a.name.trim().toLowerCase() === value.artist.trim().toLowerCase(),
   );
-  const albumOptions = (matchedArtist
+  const albumChoices = matchedArtist
     ? albums.filter((al) => al.artist_id === matchedArtist.id)
-    : albums
-  ).map((al) => ({
+    : albums;
+  const albumOptions = albumChoices.map((al) => ({
     value: al.title,
     hint: al.year != null ? String(al.year) : undefined,
   }));
@@ -190,13 +193,24 @@ export function MetadataFields({
             options={albumOptions}
             value={value.album}
             onChange={(album) => {
-              const match = albums.find(
-                (al) => al.title.toLowerCase() === album.trim().toLowerCase(),
-              );
+              const match = albumChoices.find((al) => sameName(al.title, album));
               set({
                 album,
                 year: match?.year != null ? String(match.year) : value.year,
               });
+
+              // An album that already has a song uploaded shares its cover too.
+              if (!match || !value.artist.trim() || !onReuseCover) return;
+              const coverSong = pool.find(
+                (s) =>
+                  s.artwork_path &&
+                  (matchedArtist
+                    ? s.artist_id === matchedArtist.id
+                    : sameName(s.artist, value.artist)) &&
+                  (s.album_id === match.id ||
+                    (!!s.album && sameName(s.album, match.title))),
+              );
+              if (coverSong?.artwork_path) onReuseCover(coverSong.artwork_path);
             }}
             placeholder="Album (optional)"
             searchPlaceholder="Search albums..."

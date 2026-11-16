@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getPublicUrl } from "../lib/supabase";
 import type { ArtworkOption } from "../lib/types";
 
@@ -13,6 +13,8 @@ interface ArtworkFieldProps {
   onSelectPath: (path: string | null) => void;
   /** Artwork currently saved on the song (edit dialog). */
   currentPath?: string | null;
+  /** Current artist, used to only offer covers from this artist's songs. */
+  artist?: string;
   /** Current metadata, used to surface covers from the same album first. */
   album?: string;
   label?: string;
@@ -25,7 +27,8 @@ type ArtworkMode = "upload" | "existing";
 /**
  * Artwork input shared by the upload and edit dialogs. Songs from the same
  * album usually share a cover, so besides uploading a file this lets the user
- * reuse any cover already in storage. Reusing a path does not copy the file.
+ * reuse a cover already in storage from the same artist. Reusing a path does
+ * not copy the file.
  */
 export function ArtworkField({
   covers = [],
@@ -34,6 +37,7 @@ export function ArtworkField({
   selectedPath,
   onSelectPath,
   currentPath,
+  artist = "",
   album = "",
   label = "Artwork",
   inputClass,
@@ -51,8 +55,30 @@ export function ArtworkField({
     else onFileChange(null);
   }
 
+  // Only covers belonging to the song's artist are valid reuse candidates: a
+  // different artist's cover would be wrong for this song.
+  const normalizedArtist = artist.trim().toLowerCase();
+  const artistCovers = normalizedArtist
+    ? covers.filter((c) => c.artist.trim().toLowerCase() === normalizedArtist)
+    : [];
+  const canReuse = artistCovers.length > 0;
+  const activeMode: ArtworkMode = canReuse ? mode : "upload";
+  const selectedAvailable =
+    !selectedPath || artistCovers.some((c) => c.path === selectedPath);
+
+  // A cover selected elsewhere (e.g. reused automatically when picking an
+  // album) should be reflected in the UI.
+  useEffect(() => {
+    if (canReuse && selectedPath && !file) setMode("existing");
+  }, [canReuse, selectedPath, file]);
+
+  // Changing the artist can invalidate the current selection.
+  useEffect(() => {
+    if (!selectedAvailable) onSelectPath(null);
+  }, [selectedAvailable, onSelectPath]);
+
   const normalizedAlbum = album.trim().toLowerCase();
-  const sortedCovers = [...covers].sort((a, b) => {
+  const sortedCovers = [...artistCovers].sort((a, b) => {
     if (normalizedAlbum) {
       const aMatch = a.album?.trim().toLowerCase() === normalizedAlbum;
       const bMatch = b.album?.trim().toLowerCase() === normalizedAlbum;
@@ -79,33 +105,35 @@ export function ArtworkField({
     <div>
       <div className="mb-2 flex items-center justify-between">
         <label className="block text-xs text-zinc-400">{label}</label>
-        <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
-          <button
-            type="button"
-            onClick={() => switchMode("upload")}
-            className={`rounded-md px-3 py-1 transition ${
-              mode === "upload"
-                ? "bg-rose-500 text-white"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Upload
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMode("existing")}
-            className={`rounded-md px-3 py-1 transition ${
-              mode === "existing"
-                ? "bg-rose-500 text-white"
-                : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Use existing
-          </button>
-        </div>
+        {canReuse && (
+          <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => switchMode("upload")}
+              className={`rounded-md px-3 py-1 transition ${
+                activeMode === "upload"
+                  ? "bg-rose-500 text-white"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode("existing")}
+              className={`rounded-md px-3 py-1 transition ${
+                activeMode === "existing"
+                  ? "bg-rose-500 text-white"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              Use existing
+            </button>
+          </div>
+        )}
       </div>
 
-      {mode === "upload" ? (
+      {activeMode === "upload" ? (
         <div>
           <input
             type="file"
@@ -124,14 +152,12 @@ export function ArtworkField({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search covers by song, artist or album..."
+            placeholder="Search this artist's covers by song or album..."
             className={`${inputClass} mb-2`}
           />
           {filtered.length === 0 ? (
             <p className="rounded-xl border border-dashed border-zinc-700 px-4 py-4 text-center text-xs text-zinc-500">
-              {covers.length === 0
-                ? "No uploaded covers to reuse yet."
-                : "No covers match your search."}
+              No covers from this artist match your search.
             </p>
           ) : (
             <div className="grid max-h-44 grid-cols-4 gap-2 overflow-y-auto rounded-xl border border-zinc-800 p-2 sm:grid-cols-5">

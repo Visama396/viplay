@@ -149,6 +149,7 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
           excludeSongId={song.id}
           value={meta}
           onChange={setMeta}
+          onReuseCover={setArtworkPath}
           inputClass={inputClass}
         />
 
@@ -159,6 +160,7 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
           selectedPath={artworkPath}
           onSelectPath={setArtworkPath}
           currentPath={song.artwork_path}
+          artist={meta.artist}
           album={meta.album}
           label="Artwork (replace)"
           inputClass={inputClass}

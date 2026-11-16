@@ -127,6 +127,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
           songs={songs}
           value={meta}
           onChange={setMeta}
+          onReuseCover={setArtworkPath}
           inputClass={inputClass}
         />
 
@@ -147,6 +148,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
           onFileChange={setArtwork}
           selectedPath={artworkPath}
           onSelectPath={setArtworkPath}
+          artist={meta.artist}
           album={meta.album}
           inputClass={inputClass}
           fileClass={fileClass}
