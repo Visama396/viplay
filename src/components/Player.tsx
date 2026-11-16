@@ -53,6 +53,10 @@ interface PlayerProps {
   onPlay: (songs: Song[], playlist?: PlaylistWithSongs | null) => void;
   /** Restarts the queue from the beginning (playlist loop). */
   onRestart: () => void;
+  /** Whether the active playlist is being played in random order. */
+  shuffle: boolean;
+  /** Turns playlist shuffle on or off. */
+  onToggleShuffle: () => void;
 }
 
 export default function Player({
@@ -72,6 +76,8 @@ export default function Player({
   onPlaylistOpenChange,
   onPlay,
   onRestart,
+  shuffle,
+  onToggleShuffle,
 }: PlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   /** Scales the vinyl. Driven imperatively at 60fps to avoid re-renders. */
@@ -429,6 +435,25 @@ export default function Player({
       </svg>
     );
 
+  const shuffleIcon = (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22" />
+      <path d="m18 2 4 4-4 4" />
+      <path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2" />
+      <path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8" />
+      <path d="m18 14 4 4-4 4" />
+    </svg>
+  );
+
   const volumeIcon =
     volume === 0 ? (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -542,6 +567,20 @@ export default function Player({
                 />
               </PopoverContent>
             </Popover>
+          )}
+          {playlist && (
+            <button
+              type="button"
+              onClick={onToggleShuffle}
+              className={`shrink-0 transition ${
+                shuffle ? "text-rose-500" : "text-zinc-300 hover:text-white"
+              }`}
+              aria-label={shuffle ? "Shuffle playlist on" : "Shuffle playlist"}
+              aria-pressed={shuffle}
+              title={shuffle ? "Shuffle on" : "Shuffle playlist"}
+            >
+              {shuffleIcon}
+            </button>
           )}
           <button
             onClick={cycleLoop}
@@ -706,6 +745,20 @@ export default function Player({
                       )}
                     </PopoverContent>
                   </Popover>
+                )}
+                {playlist && (
+                  <button
+                    type="button"
+                    onClick={onToggleShuffle}
+                    className={`transition ${
+                      shuffle ? "text-rose-500" : "text-zinc-300 hover:text-white"
+                    }`}
+                    aria-label={shuffle ? "Shuffle playlist on" : "Shuffle playlist"}
+                    aria-pressed={shuffle}
+                    title={shuffle ? "Shuffle on" : "Shuffle playlist"}
+                  >
+                    {shuffleIcon}
+                  </button>
                 )}
                 <button
                   onClick={cycleLoop}

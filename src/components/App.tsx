@@ -23,6 +23,7 @@ import {
   RECENT_LIMIT,
 } from "../lib/catalog";
 import { addSongToPlaylist, copyPlaylist, isPlaylistOwner } from "../lib/playlists";
+import { shuffleAvoidingFirst, shuffleItems } from "../lib/shuffle";
 import type { Account } from "../lib/auth";
 import { getCurrentAccount, logout } from "../lib/auth";
 import type {
@@ -59,6 +60,8 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [activePlaylist, setActivePlaylist] = useState<PlaylistWithSongs | null>(null);
   const [playlistViewOpen, setPlaylistViewOpen] = useState(false);
+  /** Shuffle is a per-playlist mode; it resets when a non-playlist queue starts. */
+  const [shuffle, setShuffle] = useState(false);
 
   const currentSong = queue[currentIndex];
 
@@ -151,6 +154,8 @@ export default function App() {
     setAccount(null);
     setQueue([]);
     setCurrentIndex(-1);
+    setActivePlaylist(null);
+    setShuffle(false);
     setView("browse");
   }, []);
 
@@ -314,13 +319,23 @@ export default function App() {
       if (playlist) {
         setActivePlaylist(playlist);
         const idx = playlist.songs.findIndex((s) => s.id === requested[0].id);
-        switchQueue(playlist.songs, idx < 0 ? 0 : idx);
+        const start = idx < 0 ? 0 : idx;
+        if (shuffle) {
+          // Keep the picked song playing and randomize the rest.
+          const first = playlist.songs[start];
+          const rest = playlist.songs.filter((s) => s.id !== first.id);
+          switchQueue([first, ...shuffleItems(rest)], 0);
+        } else {
+          switchQueue(playlist.songs, start);
+        }
         return;
       }
-      if (requested.length === 1) setActivePlaylist(null);
+      // Shuffle only applies to playlist playback.
+      setActivePlaylist(null);
+      setShuffle(false);
       switchQueue(requested, 0);
     },
-    [switchQueue],
+    [switchQueue, shuffle],
   );
 
   const handlePlayPlaylist = useCallback(
@@ -334,11 +349,49 @@ export default function App() {
     setCurrentIndex((i) => (i >= queue.length - 1 ? queue.length - 1 : i + 1));
   }, [queue.length]);
 
-  const handleRestart = useCallback(() => setCurrentIndex(0), []);
+  const handleRestart = useCallback(() => {
+    if (shuffle && activePlaylist && activePlaylist.songs.length > 0) {
+      // Starting a new pass: refresh the shuffle, but never put the song that
+      // just finished (last of the previous pass) first again.
+      const lastId = queue[queue.length - 1]?.id;
+      const next = shuffleAvoidingFirst(
+        activePlaylist.songs,
+        (s) => s.id === lastId,
+      );
+      setQueue(next);
+      setCurrentIndex(0);
+      return;
+    }
+    setCurrentIndex(0);
+  }, [shuffle, activePlaylist, queue]);
 
   const handlePrev = useCallback(() => {
     setCurrentIndex((i) => (i <= 0 ? 0 : i - 1));
   }, []);
+
+  const handleToggleShuffle = useCallback(() => {
+    if (!activePlaylist || queue.length === 0) return;
+    const current = queue[currentIndex];
+
+    if (shuffle) {
+      // Back to the playlist's own order, keeping the current song playing.
+      const index = current
+        ? activePlaylist.songs.findIndex((s) => s.id === current.id)
+        : -1;
+      setQueue(activePlaylist.songs);
+      setCurrentIndex(index < 0 ? 0 : index);
+      setShuffle(false);
+      return;
+    }
+
+    // Keep the current song at the front, then randomize what comes next.
+    const rest = activePlaylist.songs.filter((s) => s.id !== current?.id);
+    const next = current ? [current, ...shuffleItems(rest)] : shuffleItems(rest);
+    if (next.length === 0) return;
+    setQueue(next);
+    setCurrentIndex(0);
+    setShuffle(true);
+  }, [activePlaylist, queue, currentIndex, shuffle]);
 
   const handleEnded = useCallback(() => {
     if (currentIndex >= queue.length - 1) return;
@@ -416,6 +469,8 @@ export default function App() {
           onPlaylistOpenChange={setPlaylistViewOpen}
           onPlay={handlePlay}
           onRestart={handleRestart}
+          shuffle={shuffle}
+          onToggleShuffle={handleToggleShuffle}
         />
       )}
       {authOpen && (
@@ -480,8 +535,7 @@ export default function App() {
               onPlay={(songs) => {
                 const manageId = playlistDialog.kind === "manage" ? playlistDialog.id : null;
                 const pl = manageId ? playlists.find((p) => p.id === manageId) : undefined;
-                setActivePlaylist(pl ?? null);
-                handlePlay(songs);
+                handlePlay(songs, pl ?? null);
               }}
             />
           </div>
