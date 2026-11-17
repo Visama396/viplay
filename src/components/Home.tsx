@@ -1,10 +1,25 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { getPublicUrl } from "../lib/supabase";
 import { artistCredit } from "../lib/catalog";
 import type { Account } from "../lib/auth";
 import type { Artist, PlaylistWithSongs, Song } from "../lib/types";
 import { isPlaylistOwner } from "../lib/playlists";
 import { Skeleton } from "./ui/skeleton";
+import TiltedCard from "./TiltedCard.jsx";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "./ui/sidebar";
 
 export interface HomeProps {
   songs: Song[];
@@ -153,289 +168,96 @@ export default function Home({
   const myPlaylists = playlists.filter((pl) => isPlaylistOwner(pl, account));
 
   return (
-    <div className="flex h-full min-w-0 flex-1">
-      <aside className="hidden w-72 shrink-0 overflow-y-auto border-r border-zinc-800 p-4 sm:block">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            Playlists
-          </h2>
-          <button
-            onClick={onCreatePlaylist}
-            className="rounded-full px-2 py-0.5 text-sm text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
-            aria-label="New playlist"
-            title="New playlist"
-          >
-            +
-          </button>
-        </div>
-        <div className="space-y-1">
-          {loading ? (
-            <div className="space-y-1" aria-label="Loading playlists">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="mt-1.5 h-3 w-1/2" />
-                  </div>
-                  <Skeleton className="ml-2 h-4 w-4 shrink-0" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            playlists.map((pl) => {
-            const owner = isPlaylistOwner(pl, account);
-            return (
-              <div
-                key={pl.id}
-                className="group/pl flex w-full items-center gap-1 rounded-lg transition hover:bg-zinc-800/60"
-              >
-                <button
-                  onClick={() => onPlayPlaylist(pl)}
-                  className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-left"
-                >
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1.5 truncate text-sm text-zinc-200">
-                      {!pl.is_public && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-zinc-500">
-                          <rect x="3" y="11" width="18" height="11" rx="2" />
-                          <path d="M7 11V7a5 5 0 0110 0v4" />
-                        </svg>
-                      )}
-                      <span className="truncate">{pl.name}</span>
-                    </span>
-                    <span className="block truncate text-[11px] text-zinc-500">
-                      by {pl.creator_name ?? "Unknown"}
-                    </span>
-                  </span>
-                  <span className="ml-2 shrink-0 text-xs text-zinc-500">
-                    {pl.songs.length}
-                  </span>
-                </button>
-                {owner && (
-                  <button
-                    onClick={() => onManagePlaylist(pl)}
-                    className="shrink-0 rounded-full p-1.5 text-zinc-500 opacity-0 transition hover:bg-zinc-700 hover:text-white group-hover/pl:opacity-100"
-                    aria-label={`Edit ${pl.name}`}
-                    title="Edit playlist"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                )}
-                {account && !owner && (
-                  <button
-                    onClick={() => onCopyPlaylist(pl)}
-                    className="shrink-0 rounded-full p-1.5 text-zinc-500 opacity-0 transition hover:bg-zinc-700 hover:text-white group-hover/pl:opacity-100"
-                    aria-label={`Copy ${pl.name}`}
-                    title="Make a copy"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" />
-                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            );
-          })
-          )}
-          {!loading && playlists.length === 0 && (
-            <p className="px-3 text-sm text-zinc-600">No playlists yet</p>
-          )}
-        </div>
-      </aside>
+    <SidebarProvider
+      className="relative h-full min-h-0 w-full"
+      style={{ "--sidebar-width": "18rem" } as CSSProperties}
+    >
+      <LibrarySidebar
+        allGenres={allGenres}
+        genre={genre}
+        onGenreChange={setGenre}
+        playlists={playlists}
+        loading={loading}
+        account={account}
+        onLogin={onLogin}
+        onLogout={onLogout}
+        onAccount={onAccount}
+        onCreatePlaylist={onCreatePlaylist}
+        onPlayPlaylist={onPlayPlaylist}
+        onManagePlaylist={onManagePlaylist}
+        onCopyPlaylist={onCopyPlaylist}
+        artistEntries={artistEntries}
+        artistKey={artistKey}
+        onSelectArtist={setArtistKey}
+      />
 
       <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-3 p-4 sm:flex-nowrap sm:gap-4 sm:p-6">
-          <div className="order-1 min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-white">ViPlay</h1>
-            <p className="text-sm text-zinc-400">Browse songs and playlists</p>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <SidebarTrigger className="shrink-0 text-zinc-400 hover:bg-zinc-800 hover:text-white" />
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold text-white">ViPlay</h1>
+              <p className="text-sm text-zinc-400">Browse songs and playlists</p>
+            </div>
           </div>
+          {account && (
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <button
+                onClick={onUpload}
+                className="shrink-0 rounded-full bg-rose-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-rose-400"
+              >
+                Upload
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 pb-3">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search songs..."
-            className="order-3 min-w-0 max-w-full basis-full rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-rose-500 sm:order-2 sm:basis-auto sm:w-48 sm:flex-none lg:w-64"
+            className="w-full rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-rose-500 sm:max-w-md"
           />
-          <div className="order-2 flex shrink-0 items-center gap-2 sm:order-3 sm:gap-3">
-            {account ? (
-              <>
-                <button
-                  onClick={onUpload}
-                  className="shrink-0 rounded-full bg-rose-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-rose-400"
-                >
-                  Upload
-                </button>
-                <span className="hidden text-sm font-medium text-zinc-300 sm:block">
-                  {account.display_name}
-                </span>
-                <button
-                  onClick={onAccount}
-                  className="shrink-0 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-                >
-                  Account
-                </button>
-                <button
-                  onClick={onLogout}
-                  className="shrink-0 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
+        </div>
+
+        {activeArtist && (
+          <div className="flex flex-wrap items-center gap-2 px-6 pb-3">
+            <span className="flex items-center gap-1.5 rounded-full bg-rose-500/15 py-1 pl-3 pr-1.5 text-xs font-medium text-rose-300">
+              {activeArtist.name}
               <button
-                onClick={onLogin}
-                className="shrink-0 rounded-full bg-rose-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-rose-400"
+                onClick={() => setArtistKey(null)}
+                className="rounded-full p-0.5 text-rose-300/70 transition hover:text-white"
+                aria-label="Clear artist filter"
               >
-                Login
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                </svg>
               </button>
-            )}
-          </div>
-        </div>
-
-        <div className="px-6 pb-2 sm:hidden">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              Playlists
-            </h2>
-            <button
-              onClick={onCreatePlaylist}
-              className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-            >
-              + New
-            </button>
-          </div>
-          {loading ? (
-            <div className="flex gap-2 overflow-x-auto pb-3" aria-label="Loading playlists">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-8 w-28 shrink-0 rounded-full" />
-              ))}
-            </div>
-          ) : playlists.length === 0 ? (
-            <p className="py-2 text-sm text-zinc-600">No playlists yet</p>
-          ) : (
-            <div className="flex gap-2 overflow-x-auto pb-3">
-              {playlists.map((pl) => {
-                const owner = isPlaylistOwner(pl, account);
-                return (
-                  <div
-                    key={pl.id}
-                    className="flex shrink-0 items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 py-1 pl-3 pr-1"
-                  >
-                    <button
-                      onClick={() => onPlayPlaylist(pl)}
-                      className="flex items-center gap-1.5 text-left"
-                    >
-                      {!pl.is_public && (
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-zinc-500">
-                          <rect x="3" y="11" width="18" height="11" rx="2" />
-                          <path d="M7 11V7a5 5 0 0110 0v4" />
-                        </svg>
-                      )}
-                      <span className="max-w-32 truncate text-xs text-zinc-200">
-                        {pl.name}
-                      </span>
-                      <span className="text-[11px] text-zinc-500">{pl.songs.length}</span>
-                    </button>
-                    {owner ? (
-                      <button
-                        onClick={() => onManagePlaylist(pl)}
-                        className="rounded-full p-1.5 text-zinc-500 transition hover:text-white"
-                        aria-label={`Edit ${pl.name}`}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                    ) : (
-                      account && (
-                        <button
-                          onClick={() => onCopyPlaylist(pl)}
-                          className="rounded-full p-1.5 text-zinc-500 transition hover:text-white"
-                          aria-label={`Copy ${pl.name}`}
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" />
-                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                          </svg>
-                        </button>
-                      )
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {(allGenres.length > 0 || activeArtist) && (
-          <div className="px-6 pb-3">
-            {activeArtist && (
-              <div className="mb-2 flex items-center gap-2">
-                <span className="flex items-center gap-1.5 rounded-full bg-rose-500/15 py-1 pl-3 pr-1.5 text-xs font-medium text-rose-300">
-                  {activeArtist.name}
-                  <button
-                    onClick={() => setArtistKey(null)}
-                    className="rounded-full p-0.5 text-rose-300/70 transition hover:text-white"
-                    aria-label="Clear artist filter"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </span>
-                <span className="text-[11px] text-zinc-500">
-                  {filtered.length} song{filtered.length === 1 ? "" : "s"}
-                </span>
-              </div>
-            )}
-            {allGenres.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-3">
-                <button
-                  onClick={() => setGenre(null)}
-                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
-                    genre === null
-                      ? "bg-rose-500 text-white"
-                      : "border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"
-                  }`}
-                >
-                  All
-                </button>
-                {allGenres.map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setGenre(genre === g ? null : g)}
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
-                      genre === g
-                        ? "bg-rose-500 text-white"
-                        : "border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"
-                    }`}
-                  >
-                    {g}
-                  </button>
-                ))}
-              </div>
-            )}
+            </span>
+            <span className="text-[11px] text-zinc-500">
+              {filtered.length} song{filtered.length === 1 ? "" : "s"}
+            </span>
           </div>
         )}
 
         <div className="px-6 pb-6">
           {isBrowsing && !loading && recentSongs.length > 0 && (
-            <Section title="Recently listened">
+            <Section title="Recently listened" padded>
               {recentSongs.map((song) => (
-                <RailCard key={song.id} song={song} onPlay={onPlay} />
+                <RailCard key={song.id} song={song} onPlay={onPlay} tilt />
               ))}
             </Section>
           )}
           {isBrowsing && !loading && mostListened.length > 0 && (
-            <Section title="Most listened">
+            <Section title="Most listened" padded>
               {mostListened.map((song) => (
                 <RailCard
                   key={song.id}
                   song={song}
                   plays={song.play_count}
                   onPlay={onPlay}
+                  tilt
                 />
               ))}
             </Section>
@@ -446,34 +268,6 @@ export default function Home({
                 <RailCard key={song.id} song={song} onPlay={onPlay} />
               ))}
             </Section>
-          )}
-          {isBrowsing && !loading && artistEntries.length > 0 && (
-            <div className="mb-6">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
-                Songs by artist
-              </h2>
-              <div className="flex gap-2 overflow-x-auto pb-3">
-                {artistEntries.slice(0, 12).map((a) => (
-                  <button
-                    key={a.key}
-                    onClick={() => setArtistKey(a.key)}
-                    className="flex shrink-0 items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900 py-2 pl-2 pr-4 text-left transition hover:border-zinc-600 hover:bg-zinc-800"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-500/20 text-sm font-bold text-rose-300">
-                      {a.name.trim().charAt(0).toUpperCase() || "?"}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block max-w-32 truncate text-sm font-medium text-zinc-100">
-                        {a.name}
-                      </span>
-                      <span className="block text-[11px] text-zinc-500">
-                        {a.count} song{a.count === 1 ? "" : "s"}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
           )}
           {isBrowsing && !loading && (
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
@@ -649,17 +443,462 @@ export default function Home({
           </div>
         </div>
       </main>
+    </SidebarProvider>
+  );
+}
+
+function LibrarySidebar({
+  allGenres,
+  genre,
+  onGenreChange,
+  playlists,
+  loading,
+  account,
+  onLogin,
+  onLogout,
+  onAccount,
+  onCreatePlaylist,
+  onPlayPlaylist,
+  onManagePlaylist,
+  onCopyPlaylist,
+  artistEntries,
+  artistKey,
+  onSelectArtist,
+}: {
+  allGenres: string[];
+  genre: string | null;
+  onGenreChange: (genre: string | null) => void;
+  playlists: PlaylistWithSongs[];
+  loading: boolean;
+  account: Account | null;
+  onLogin: () => void;
+  onLogout: () => void;
+  onAccount: () => void;
+  onCreatePlaylist: () => void;
+  onPlayPlaylist: (playlist: PlaylistWithSongs) => void;
+  onManagePlaylist: (playlist: PlaylistWithSongs) => void;
+  onCopyPlaylist: (playlist: PlaylistWithSongs) => void;
+  artistEntries: Array<{ key: string; name: string; count: number }>;
+  artistKey: string | null;
+  onSelectArtist: (key: string | null) => void;
+}) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const closeOnMobile = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+
+  return (
+    <Sidebar className="absolute h-full border-zinc-800">
+      <SidebarHeader className="shrink-0 flex-row items-center justify-end p-3 md:hidden">
+        <button
+          type="button"
+          onClick={() => setOpenMobile(false)}
+          className="rounded-full p-1 text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+          aria-label="Close sidebar"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+          </svg>
+        </button>
+      </SidebarHeader>
+
+      <SidebarContent className="gap-5 overflow-hidden px-4 pt-4 pb-4">
+        {allGenres.length > 0 && (
+          <SidebarGroup className="min-h-0 flex-1 basis-0 flex-col p-0">
+            <SidebarGroupLabel className="mb-3 h-auto shrink-0 px-0 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Genres
+            </SidebarGroupLabel>
+            <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <GenreFilter
+                genres={allGenres}
+                genre={genre}
+                onChange={(next) => {
+                  onGenreChange(next);
+                  closeOnMobile();
+                }}
+              />
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        <SidebarGroup className="min-h-0 flex-1 basis-0 flex-col p-0">
+          <div className="mb-3 flex shrink-0 items-center justify-between">
+            <SidebarGroupLabel className="h-auto px-0 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Playlists
+            </SidebarGroupLabel>
+            <button
+              onClick={() => {
+                onCreatePlaylist();
+                closeOnMobile();
+              }}
+              className="rounded-full px-2 py-0.5 text-sm text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+              aria-label="New playlist"
+              title="New playlist"
+            >
+              +
+            </button>
+          </div>
+          <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto pr-1">
+            <SidebarMenu>
+              {loading ? (
+                <li className="space-y-1" aria-label="Loading playlists">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="mt-1.5 h-3 w-1/2" />
+                      </div>
+                      <Skeleton className="ml-2 h-4 w-4 shrink-0" />
+                    </div>
+                  ))}
+                </li>
+              ) : (
+                playlists.map((pl) => {
+                  const owner = isPlaylistOwner(pl, account);
+                  return (
+                    <SidebarMenuItem key={pl.id}>
+                      <div className="group/pl flex w-full items-center gap-1 rounded-lg transition hover:bg-zinc-800/60">
+                        <button
+                          onClick={() => {
+                            onPlayPlaylist(pl);
+                            closeOnMobile();
+                          }}
+                          className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-left"
+                        >
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-1.5 truncate text-sm text-zinc-200">
+                              {!pl.is_public && (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-zinc-500">
+                                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                                  <path d="M7 11V7a5 5 0 0110 0v4" />
+                                </svg>
+                              )}
+                              <span className="truncate">{pl.name}</span>
+                            </span>
+                            <span className="block truncate text-[11px] text-zinc-500">
+                              by {pl.creator_name ?? "Unknown"}
+                            </span>
+                          </span>
+                          <span className="ml-2 shrink-0 text-xs text-zinc-500">
+                            {pl.songs.length}
+                          </span>
+                        </button>
+                        {owner && (
+                          <button
+                            onClick={() => {
+                              onManagePlaylist(pl);
+                              closeOnMobile();
+                            }}
+                            className="shrink-0 rounded-full p-1.5 text-zinc-500 opacity-0 transition hover:bg-zinc-700 hover:text-white group-hover/pl:opacity-100 [@media(hover:none)]:opacity-100"
+                            aria-label={`Edit ${pl.name}`}
+                            title="Edit playlist"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </button>
+                        )}
+                        {account && !owner && (
+                          <button
+                            onClick={() => {
+                              onCopyPlaylist(pl);
+                              closeOnMobile();
+                            }}
+                            className="shrink-0 rounded-full p-1.5 text-zinc-500 opacity-0 transition hover:bg-zinc-700 hover:text-white group-hover/pl:opacity-100 [@media(hover:none)]:opacity-100"
+                            aria-label={`Copy ${pl.name}`}
+                            title="Make a copy"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" />
+                              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </SidebarMenuItem>
+                  );
+                })
+              )}
+              {!loading && playlists.length === 0 && (
+                <li className="px-3 text-sm text-zinc-600">No playlists yet</li>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {!loading && artistEntries.length > 0 && (
+          <SidebarGroup className="min-h-0 flex-1 basis-0 flex-col p-0">
+            <SidebarGroupLabel className="mb-3 h-auto shrink-0 px-0 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Songs by artist
+            </SidebarGroupLabel>
+            <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <SidebarMenu>
+                {artistEntries.map((a) => {
+                  const active = a.key === artistKey;
+                  return (
+                    <SidebarMenuItem key={a.key}>
+                      <button
+                        onClick={() => {
+                          onSelectArtist(active ? null : a.key);
+                          closeOnMobile();
+                        }}
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition ${
+                          active
+                            ? "bg-rose-500/15 text-rose-200"
+                            : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold ${
+                            active
+                              ? "bg-rose-500/30 text-rose-200"
+                              : "bg-rose-500/15 text-rose-300"
+                          }`}
+                        >
+                          {a.name.trim().charAt(0).toUpperCase() || "?"}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm">{a.name}</span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
+                          {a.count}
+                        </span>
+                      </button>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+      </SidebarContent>
+
+      <SidebarFooter className="shrink-0 border-t border-zinc-800 p-4">
+        {account ? (
+          <div className="flex flex-col gap-2">
+            <span className="truncate text-sm font-medium text-zinc-300">
+              {account.display_name}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  onAccount();
+                  closeOnMobile();
+                }}
+                className="flex-1 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+              >
+                Account
+              </button>
+              <button
+                onClick={() => {
+                  onLogout();
+                  closeOnMobile();
+                }}
+                className="flex-1 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              onLogin();
+              closeOnMobile();
+            }}
+            className="w-full rounded-full bg-rose-500 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-rose-400"
+          >
+            Login
+          </button>
+        )}
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
+function HorizontalRail({
+  children,
+  className = "",
+  label,
+}: {
+  children: ReactNode;
+  className?: string;
+  label?: string;
+}) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const sync = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    setCanLeft(el.scrollLeft > 1);
+    setCanRight(el.scrollLeft < max - 1);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    for (const child of Array.from(el.children)) observer.observe(child);
+    return () => observer.disconnect();
+  }, [sync]);
+
+  // Cards can change (data loaded, images sized) without the rail resizing,
+  // so re-check the arrow state after every render.
+  useEffect(() => {
+    sync();
+  });
+
+  // A vertical mouse wheel scrolls the rail horizontally. Once the rail is at
+  // either end the event is left alone, so the page keeps scrolling instead
+  // of trapping the user inside the rail. React's wheel handler is passive,
+  // hence the native listener.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    const el = scrollerRef.current;
+    if (!wrapper || !el) return;
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) return; // pinch-zoom
+      // Leave native horizontal gestures (trackpads, tilt wheels) alone.
+      if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+
+      const delta = event.deltaY;
+      if (delta === 0) return;
+
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 1) return;
+
+      const atStart = el.scrollLeft <= 1;
+      const atEnd = el.scrollLeft >= max - 1;
+      if ((delta < 0 && atStart) || (delta > 0 && atEnd)) return;
+
+      event.preventDefault();
+      el.scrollLeft = Math.max(0, Math.min(max, el.scrollLeft + delta));
+    };
+
+    wrapper.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrapper.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const nudge = (direction: -1 | 1) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: "smooth" });
+  };
+
+  const arrowClasses = (visible: boolean, side: "left" | "right") =>
+    [
+      "absolute top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-700",
+      "bg-zinc-900/90 text-zinc-200 shadow-lg backdrop-blur transition hover:bg-zinc-800 hover:text-white",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500",
+      side === "left" ? "left-1" : "right-1",
+      visible
+        ? "opacity-0 group-hover/rail:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+        : "pointer-events-none opacity-0",
+    ].join(" ");
+
+  return (
+    <div ref={wrapperRef} className="group/rail relative">
+      <div
+        ref={scrollerRef}
+        onScroll={sync}
+        aria-label={label}
+        className={`overflow-x-auto ${className}`}
+      >
+        {children}
+      </div>
+      <button
+        type="button"
+        onClick={() => nudge(-1)}
+        disabled={!canLeft}
+        aria-label="Scroll left"
+        className={arrowClasses(canLeft, "left")}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={() => nudge(1)}
+        disabled={!canRight}
+        aria-label="Scroll right"
+        className={arrowClasses(canRight, "right")}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function GenreFilter({
+  genres,
+  genre,
+  onChange,
+}: {
+  genres: string[];
+  genre: string | null;
+  onChange: (genre: string | null) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        onClick={() => onChange(null)}
+        className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
+          genre === null
+            ? "bg-rose-500 text-white"
+            : "border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"
+        }`}
+      >
+        All
+      </button>
+      {genres.map((g) => (
+        <button
+          key={g}
+          onClick={() => onChange(genre === g ? null : g)}
+          className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition ${
+            genre === g
+              ? "bg-rose-500 text-white"
+              : "border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white"
+          }`}
+        >
+          {g}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+  padded = false,
+}: {
+  title: string;
+  children: ReactNode;
+  /** Extra horizontal gutter so tilted rail cards are not clipped. */
+  padded?: boolean;
+}) {
   return (
     <div className="mb-6">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
+      <h2
+        className={`mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400 ${
+          padded ? "px-4" : ""
+        }`}
+      >
         {title}
       </h2>
-      <div className="flex gap-4 overflow-x-auto pb-3">{children}</div>
+      <HorizontalRail
+        className={`flex gap-4 pt-2 pb-3 ${padded ? "px-4" : ""}`}
+      >
+        {children}
+      </HorizontalRail>
     </div>
   );
 }
@@ -668,21 +907,16 @@ function RailCard({
   song,
   plays,
   onPlay,
+  tilt = false,
 }: {
   song: Song;
   plays?: number;
   onPlay: (songs: Song[]) => void;
+  /** Enables the React Bits tilt + glare effect (Recently / Most listened). */
+  tilt?: boolean;
 }) {
-  return (
-    <div
-      onClick={() => onPlay([song])}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onPlay([song]);
-      }}
-      role="button"
-      tabIndex={0}
-      className="w-36 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-zinc-900 p-3 transition hover:bg-zinc-800 sm:w-44"
-    >
+  const content = (
+    <>
       {song.artwork_path ? (
         <img
           src={getPublicUrl("artwork", song.artwork_path)}
@@ -704,6 +938,48 @@ function RailCard({
           {plays} play{plays === 1 ? "" : "s"}
         </div>
       )}
+    </>
+  );
+
+  if (!tilt) {
+    return (
+      <div
+        onClick={() => onPlay([song])}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") onPlay([song]);
+        }}
+        role="button"
+        tabIndex={0}
+        className="w-36 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-zinc-900 p-3 transition hover:bg-zinc-800 sm:w-44"
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-36 shrink-0 sm:w-44">
+      <TiltedCard
+        className="tilted-card--auto-height"
+        containerWidth="100%"
+        containerHeight="auto"
+        imageWidth="100%"
+        imageHeight="auto"
+        rotateAmplitude={9}
+        scaleOnHover={1.03}
+        glare={0.45}
+        shadow={0}
+        radius={12}
+        intro={false}
+        gyroscope={false}
+        showTooltip={false}
+        altText={`${song.title} — ${artistCredit(song)}`}
+        onClick={() => onPlay([song])}
+      >
+        <div className="w-full cursor-pointer rounded-xl bg-zinc-900 p-3 text-left">
+          {content}
+        </div>
+      </TiltedCard>
     </div>
   );
 }
