@@ -42,12 +42,6 @@ const step = (state, key, target, omega, zeta, dt) => {
   return !settled;
 };
 
-export const TiltedCardLayer = ({ depth = 20, className = '', style, children }) => (
-  <div className={`tilted-card__layer ${className}`.trim()} style={{ '--tc-depth': depth, ...style }}>
-    {children}
-  </div>
-);
-
 const TiltedCard = ({
   imageSrc = undefined,
   altText = 'Tilted card image',

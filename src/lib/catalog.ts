@@ -187,7 +187,7 @@ export async function ensureAlbum(
 }
 
 /** Finds an existing genre (case-insensitive) or creates it. Null on failure. */
-export async function ensureGenre(name: string): Promise<string | null> {
+async function ensureGenre(name: string): Promise<string | null> {
   const clean = name.trim();
   if (!clean) return null;
   try {

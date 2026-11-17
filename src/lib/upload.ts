@@ -50,7 +50,7 @@ function contentType(file: File): string {
  * Reads the duration of an audio file in seconds by loading it into a hidden
  * <audio> element. Falls back to null if it can't be determined.
  */
-export function readAudioDuration(file: File): Promise<number | null> {
+function readAudioDuration(file: File): Promise<number | null> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const audio = document.createElement("audio");

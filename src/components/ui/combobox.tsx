@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { cn } from "../../lib/utils";
 
-export interface ComboboxOption {
+interface ComboboxOption {
   value: string;
   label?: string;
   hint?: string;

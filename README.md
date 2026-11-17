@@ -36,11 +36,11 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 /
 ├── public/
 ├── scripts/
-│   └── seed.mjs              # uploads files + inserts song rows (needs service role key)
+│   ├── migrate-accounts.mjs  # migrate pre-Auth accounts to Supabase Auth
+│   └── relink-accounts.mjs   # link accounts to their Supabase Auth users
 ├── supabase/
 │   └── migrations/
-│       └── 0001_init.sql     # full schema: tables, RLS, buckets, RPCs
-├── seed-assets/              # your local songs: one folder per song (see seed.mjs)
+│       └── 0001_init.sql     # consolidated schema: tables, RLS, buckets, RPCs
 └── src/
     ├── lib/
 │   ├── supabase.ts       # Supabase client + public URL helpers

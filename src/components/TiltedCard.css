@@ -61,13 +61,7 @@
   pointer-events: none;
 }
 
-.tilted-card__layer {
-  position: absolute;
-  inset: 0;
-}
-
-.tilted-card__img,
-.tilted-card__layer {
+.tilted-card__img {
   transform: translate3d(
     calc(var(--tc-px, 0) * var(--tc-depth, 0) * 1px),
     calc(var(--tc-py, 0) * var(--tc-depth, 0) * 1px),

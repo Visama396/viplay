@@ -1,11 +1,11 @@
-export interface LyricWord {
+interface LyricWord {
   time: number;
   text: string;
   /** Optional end time (<time> tag with no text after it). Creates a pause gap. */
   end?: number;
 }
 
-export interface LyricLine {
+interface LyricLine {
   time: number;
   /** Start time of the next line, or null for the last line. */
   endTime: number | null;
@@ -14,7 +14,7 @@ export interface LyricLine {
   words: LyricWord[];
 }
 
-export interface ParsedLyrics {
+interface ParsedLyrics {
   lines: LyricLine[];
   metadata: Record<string, string>;
   /** True when at least one line carries per-word timings. */
@@ -169,21 +169,7 @@ export function parseLrc(content: string): ParsedLyrics {
   return { lines, metadata, hasWordTiming, untimed };
 }
 
-/**
- * Returns the current line index and progress (0..1) within that line for a
- * given playback time, used to drive the karaoke highlight.
- * Kept for backward compatibility; prefers word timings when present.
- */
-export function getCurrentLine(
-  lines: LyricLine[],
-  time: number,
-): { index: number; progress: number } | null {
-  const active = getActiveLyrics(lines, time);
-  if (!active) return null;
-  return { index: active.lineIndex, progress: active.lineProgress };
-}
-
-export interface ActiveLyrics {
+interface ActiveLyrics {
   lineIndex: number;
   wordIndex: number;
   /** 0..1 progress within the active word (1 when past it). */
