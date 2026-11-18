@@ -1,5 +1,6 @@
 import { artistCredit } from "../lib/catalog";
 import type { PlaylistWithSongs, Song } from "../lib/types";
+import { useI18n } from "../lib/i18n";
 
 interface PlaylistViewDialogProps {
   playlist: PlaylistWithSongs;
@@ -16,6 +17,7 @@ export default function PlaylistViewDialog({
   currentSongId,
   isPlaying = false,
 }: PlaylistViewDialogProps) {
+  const { t } = useI18n();
   const songs = playlist.songs;
 
   const isCurrentSong = (id: string) => id === currentSongId;
@@ -26,13 +28,15 @@ export default function PlaylistViewDialog({
         <div className="min-w-0">
           <h2 className="truncate text-lg font-bold text-white">{playlist.name}</h2>
           <p className="truncate text-xs text-zinc-400">
-            by {playlist.creator_name ?? "Unknown"}
+            {t("common.by", {
+              name: playlist.creator_name ?? t("common.unknown"),
+            })}
           </p>
         </div>
         <button
           onClick={() => onOpenChange(false)}
           className="shrink-0 text-zinc-500 transition hover:text-white"
-          aria-label="Close"
+          aria-label={t("common.close")}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
@@ -41,19 +45,23 @@ export default function PlaylistViewDialog({
       </div>
 
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-zinc-200">Songs ({songs.length})</h3>
+        <h3 className="text-sm font-semibold text-zinc-200">
+          {t("common.songsCount", { count: songs.length })}
+        </h3>
         {songs.length > 0 && (
           <button
             onClick={() => onPlay(playlist.songs, playlist)}
             className="text-xs font-medium text-rose-400 transition hover:text-rose-300"
           >
-            Play all
+            {t("common.playAll")}
           </button>
         )}
       </div>
 
       {songs.length === 0 ? (
-        <p className="py-8 text-center text-sm text-zinc-500">This playlist has no songs yet.</p>
+        <p className="py-8 text-center text-sm text-zinc-500">
+          {t("playlistView.empty")}
+        </p>
       ) : (
         <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-2">
           {songs.map((s) => (
@@ -68,7 +76,11 @@ export default function PlaylistViewDialog({
               <button
                 onClick={() => onPlay([s], playlist)}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-200 transition hover:bg-rose-500 hover:text-white"
-                aria-label={isCurrentSong(s.id) ? `Now playing ${s.title}` : `Play ${s.title}`}
+                aria-label={
+                  isCurrentSong(s.id)
+                    ? t("playlistView.nowPlaying", { title: s.title })
+                    : t("playlistView.playSong", { title: s.title })
+                }
               >
                 {isCurrentSong(s.id) && isPlaying ? (
                   <span

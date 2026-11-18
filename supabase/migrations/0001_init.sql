@@ -65,6 +65,7 @@ create table if not exists public.accounts (
   password_hash text not null default '',
   display_name text,
   auth_id uuid references auth.users (id) on delete cascade,
+  language text not null default 'es',
   created_at timestamptz not null default now()
 );
 
@@ -75,6 +76,8 @@ alter table public.accounts
   add column if not exists display_name text;
 alter table public.accounts
   add column if not exists auth_id uuid references auth.users (id) on delete cascade;
+alter table public.accounts
+  add column if not exists language text not null default 'es';
 
 create unique index if not exists idx_accounts_auth_id
   on public.accounts (auth_id);
@@ -258,6 +261,33 @@ begin
 end;
 $$;
 
+-- Persists the account's UI language so it follows the user across devices.
+-- The allowed values mirror src/lib/language.ts.
+create or replace function public.set_account_language(p_language text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_language text := lower(btrim(p_language));
+begin
+  if v_language not in ('es', 'de', 'gl', 'uk', 'ja') then
+    raise exception 'unsupported language: %', p_language;
+  end if;
+
+  update public.accounts
+  set language = v_language
+  where auth_id = auth.uid();
+
+  if not found then
+    raise exception 'account not found';
+  end if;
+
+  return v_language;
+end;
+$$;
+
 -- Safe username availability check for registration (accounts is RLS-protected,
 -- so anonymous visitors cannot query it directly).
 create or replace function public.username_taken(p_username text)
@@ -398,6 +428,9 @@ grant execute on function public.is_admin() to authenticated;
 
 revoke all on function public.ensure_account_link(text, text) from public, anon;
 grant execute on function public.ensure_account_link(text, text) to authenticated;
+
+revoke all on function public.set_account_language(text) from public, anon;
+grant execute on function public.set_account_language(text) to authenticated;
 
 revoke all on function public.delete_song(uuid) from public, anon;
 grant execute on function public.delete_song(uuid) to authenticated;

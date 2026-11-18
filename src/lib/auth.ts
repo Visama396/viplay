@@ -1,9 +1,31 @@
 import { supabase } from "./supabase";
+import {
+  DEFAULT_LANGUAGE,
+  isLanguage,
+  type Language,
+} from "./language";
 
 export interface Account {
   id: string;
   username: string;
   display_name: string;
+  language: Language;
+}
+
+interface AccountRow {
+  id: string;
+  username: string;
+  display_name: string | null;
+  language?: string | null;
+}
+
+function normalizeAccount(row: AccountRow): Account {
+  return {
+    id: row.id,
+    username: row.username,
+    display_name: row.display_name ?? row.username,
+    language: isLanguage(row.language) ? row.language : DEFAULT_LANGUAGE,
+  };
 }
 
 // Username is used as a fake email so Supabase Auth works without requiring a
@@ -18,13 +40,22 @@ export async function getCurrentAccount(): Promise<Account | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("id, username, display_name, language")
+    .eq("auth_id", user.id)
+    .maybeSingle();
+  if (!error) return data ? normalizeAccount(data as AccountRow) : null;
+
+  // Older databases may not have the language column yet; keep the app usable
+  // until the migration that adds it has been applied.
+  const fallback = await supabase
     .from("accounts")
     .select("id, username, display_name")
     .eq("auth_id", user.id)
     .maybeSingle();
 
-  return data ? (data as Account) : null;
+  return fallback.data ? normalizeAccount(fallback.data as AccountRow) : null;
 }
 
 export async function register(
@@ -112,8 +143,7 @@ async function linkAccount(
     p_display_name: displayName,
   });
   if (error || !data) return null;
-  const acc = data as Account;
-  return { id: acc.id, username: acc.username, display_name: acc.display_name };
+  return normalizeAccount(data as AccountRow);
 }
 
 export async function logout(): Promise<void> {
@@ -140,12 +170,7 @@ export async function updateDisplayName(
   if (error || !data) {
     return { error: error?.message ?? "Could not update display name" };
   }
-  const acc = data as Account;
-  const updated = {
-    id: acc.id,
-    username: acc.username,
-    display_name: acc.display_name,
-  };
+  const updated = normalizeAccount(data as AccountRow);
 
   // Playlist author names are snapshotted at creation, so sync the user's
   // existing playlists too (best effort; owners may update their own rows).
@@ -156,6 +181,19 @@ export async function updateDisplayName(
   if (plError) console.warn("Could not sync playlist author names", plError);
 
   return { account: updated };
+}
+
+/**
+ * Stores the UI language on the account. accounts has no UPDATE policy, so the
+ * SECURITY DEFINER RPC validates that the caller owns the row.
+ */
+export async function updateAccountLanguage(
+  language: Language,
+): Promise<{ error?: string }> {
+  const { error } = await supabase.rpc("set_account_language", {
+    p_language: language,
+  });
+  return error ? { error: error.message } : {};
 }
 
 export async function changePassword(

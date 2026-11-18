@@ -512,6 +512,71 @@ export async function updateSong(
 }
 
 /**
+ * Saves LRC text for an existing song from the player's lyrics editor.
+ *
+ * Unlike updateSong (which rewrites metadata too), this only touches the
+ * lyrics object and `songs.lyrics_path`. Each save writes a fresh timestamped
+ * object because Supabase Storage is CDN-cached: overwriting the same path
+ * would keep serving the old bytes. Empty text clears the lyrics.
+ */
+export async function saveLyrics(
+  songId: string,
+  lyricsText: string,
+): Promise<{ path?: string | null; error?: string }> {
+  const { data: song, error: fetchErr } = await supabase
+    .from("songs")
+    .select("title, artist, lyrics_path")
+    .eq("id", songId)
+    .maybeSingle();
+  if (fetchErr) return { error: `Could not load song: ${fetchErr.message}` };
+  if (!song) return { error: "Song not found" };
+
+  const oldPath: string | null = song.lyrics_path ?? null;
+
+  if (lyricsText.trim() === "") {
+    if (!oldPath) return { path: null };
+    const { error: updateErr } = await supabase
+      .from("songs")
+      .update({ lyrics_path: null })
+      .eq("id", songId);
+    if (updateErr) return { error: `Could not save lyrics: ${updateErr.message}` };
+    const { error: removeErr } = await supabase.storage
+      .from("lyrics")
+      .remove([oldPath]);
+    if (removeErr) console.warn(`Could not delete cleared lyrics ${oldPath}: ${removeErr.message}`);
+    return { path: null };
+  }
+
+  const base = `${toStorageName(song.artist)}-${toStorageName(song.title)}-${Date.now()}`;
+  const path = `${base}.lrc`;
+  const { error: uploadErr } = await supabase.storage
+    .from("lyrics")
+    .upload(path, new Blob([lyricsText], { type: "text/plain" }), {
+      upsert: false,
+      contentType: "text/plain",
+    });
+  if (uploadErr) return { error: `Could not save lyrics: ${uploadErr.message}` };
+
+  const { error: updateErr } = await supabase
+    .from("songs")
+    .update({ lyrics_path: path })
+    .eq("id", songId);
+  if (updateErr) {
+    await supabase.storage.from("lyrics").remove([path]);
+    return { error: `Could not save lyrics: ${updateErr.message}` };
+  }
+
+  if (oldPath && oldPath !== path) {
+    const { error: removeErr } = await supabase.storage
+      .from("lyrics")
+      .remove([oldPath]);
+    if (removeErr) console.warn(`Could not delete old lyrics ${oldPath}: ${removeErr.message}`);
+  }
+
+  return { path };
+}
+
+/**
  * Deletes a song (row + storage files) via the SECURITY DEFINER RPC. The
  * function verifies the caller from the signed JWT (auth.uid()) and only lets
  * the admin account ("visama396") delete.

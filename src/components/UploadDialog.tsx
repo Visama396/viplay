@@ -4,6 +4,7 @@ import type { Album, Artist, ArtworkOption, Song } from "../lib/types";
 import { uploadSong } from "../lib/upload";
 import { ArtworkField } from "./ArtworkField";
 import { MetadataFields, type MetadataValue } from "./MetadataFields";
+import { useI18n } from "../lib/i18n";
 
 interface UploadDialogProps {
   account: Account;
@@ -27,6 +28,7 @@ const emptyMetadata: MetadataValue = {
 };
 
 export default function UploadDialog({ account, artists = [], albums = [], allGenres = [], songs = [], covers = [], onClose, onUploaded }: UploadDialogProps) {
+  const { t, errorText } = useI18n();
   const [title, setTitle] = useState("");
   const [meta, setMeta] = useState<MetadataValue>(emptyMetadata);
   const [audio, setAudio] = useState<File | null>(null);
@@ -36,7 +38,9 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
   const [lyricsText, setLyricsText] = useState("");
   const [lyrics, setLyrics] = useState<File | null>(null);
   const [secondaryMode, setSecondaryMode] = useState<"text" | "file">("text");
-  const [secondaryLabel, setSecondaryLabel] = useState("Romanized");
+  const [secondaryLabel, setSecondaryLabel] = useState(() =>
+    t("upload.romanizedPlaceholder"),
+  );
   const [secondaryText, setSecondaryText] = useState("");
   const [secondaryFile, setSecondaryFile] = useState<File | null>(null);
   const [showSecondary, setShowSecondary] = useState(false);
@@ -51,7 +55,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
     if (!audio) return;
     setUploading(true);
     setError("");
-    setProgress("Uploading files...");
+    setProgress(t("upload.uploadingFiles"));
 
     const parsedYear = parseInt(meta.year, 10);
 
@@ -77,7 +81,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
 
     setUploading(false);
     if (result.error) {
-      setError(result.error);
+      setError(errorText(result.error));
       setProgress("");
       return;
     }
@@ -94,11 +98,11 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
   return (
     <div className="flex flex-col rounded-2xl bg-zinc-950 p-6 sm:p-8">
       <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">Upload a song</h2>
+        <h2 className="text-xl font-bold text-white">{t("upload.title")}</h2>
         <button
           onClick={onClose}
           className="text-zinc-500 transition hover:text-white"
-          aria-label="Close"
+          aria-label={t("common.close")}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
@@ -108,7 +112,9 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-xs text-zinc-400">Title *</label>
+          <label className="mb-1 block text-xs text-zinc-400">
+            {t("upload.titleLabel")}
+          </label>
           <input
             type="text"
             value={title}
@@ -116,7 +122,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
             className={inputClass}
             required
             maxLength={120}
-            placeholder="Song title"
+            placeholder={t("upload.songTitlePlaceholder")}
           />
         </div>
 
@@ -132,7 +138,9 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
         />
 
         <div>
-          <label className="mb-1 block text-xs text-zinc-400">Audio file *</label>
+          <label className="mb-1 block text-xs text-zinc-400">
+            {t("upload.audioFile")}
+          </label>
           <input
             type="file"
             accept="audio/*,.mp3,.ogg,.wav,.m4a,.flac"
@@ -156,7 +164,9 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className="block text-xs text-zinc-400">Lyrics</label>
+            <label className="block text-xs text-zinc-400">
+              {t("upload.lyricsLabel")}
+            </label>
             <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
               <button
                 type="button"
@@ -165,7 +175,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
                   lyricsMode === "text" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
                 }`}
               >
-                Write
+                {t("common.write")}
               </button>
               <button
                 type="button"
@@ -174,7 +184,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
                   lyricsMode === "file" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
                 }`}
               >
-                File
+                {t("common.file")}
               </button>
             </div>
           </div>
@@ -186,17 +196,18 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
                 onChange={(e) => setLyricsText(e.target.value)}
                 spellCheck={false}
                 rows={5}
-                placeholder={"[00:12.50]Hello"}
+                placeholder={t("upload.lrcPlaceholder")}
                 className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 font-mono text-xs leading-relaxed text-zinc-100 placeholder-zinc-600 outline-none transition-colors focus:border-rose-500"
               />
               <p className="mt-1 text-xs text-zinc-500">
-                LRC format, e.g. <span className="font-mono">[00:12.50]Hello</span>.
-                Leave empty for no lyrics.
+                {t("upload.lrcHelp")}
               </p>
             </div>
           ) : (
             <div>
-              <label className="mb-1 block text-xs text-zinc-400">Lyrics (.lrc)</label>
+              <label className="mb-1 block text-xs text-zinc-400">
+                {t("upload.lyricsFile")}
+              </label>
               <input
                 type="file"
                 accept=".lrc,.txt,text/plain"
@@ -215,10 +226,8 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
             aria-expanded={showSecondary}
           >
             <span>
-              Secondary lyrics{" "}
-              <span className="text-zinc-600">
-                (optional — e.g. romanized, transliteration)
-              </span>
+              {t("upload.secondary")}{" "}
+              <span className="text-zinc-600">{t("upload.secondaryHint")}</span>
             </span>
             <span className="text-lg leading-none">{showSecondary ? "−" : "+"}</span>
           </button>
@@ -226,7 +235,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
             <div className="space-y-3 border-t border-zinc-800 p-4">
               <div>
                 <label className="mb-1 block text-xs text-zinc-400">
-                  Button label
+                  {t("upload.buttonLabel")}
                 </label>
                 <input
                   type="text"
@@ -234,7 +243,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
                   onChange={(e) => setSecondaryLabel(e.target.value)}
                   className={inputClass}
                   maxLength={24}
-                  placeholder="Romanized"
+                  placeholder={t("upload.romanizedPlaceholder")}
                 />
               </div>
               <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
@@ -245,7 +254,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
                     secondaryMode === "text" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
                   }`}
                 >
-                  Write
+                  {t("common.write")}
                 </button>
                 <button
                   type="button"
@@ -254,7 +263,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
                     secondaryMode === "file" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
                   }`}
                 >
-                  File
+                  {t("common.file")}
                 </button>
               </div>
               {secondaryMode === "text" ? (
@@ -263,7 +272,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
                   onChange={(e) => setSecondaryText(e.target.value)}
                   spellCheck={false}
                   rows={5}
-                  placeholder={"[00:12.50]Romaji lyrics..."}
+                  placeholder={t("upload.secondaryPlaceholder")}
                   className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 font-mono text-xs leading-relaxed text-zinc-100 placeholder-zinc-600 outline-none transition-colors focus:border-rose-500"
                 />
               ) : (
@@ -275,7 +284,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
                 />
               )}
               <p className="text-xs text-zinc-500">
-                Same LRC timestamps as the original, but in the alternate script.
+                {t("upload.secondaryHelp")}
               </p>
             </div>
           )}
@@ -292,7 +301,7 @@ export default function UploadDialog({ account, artists = [], albums = [], allGe
           disabled={uploading || !canSubmit}
           className="w-full rounded-xl bg-rose-500 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-400 disabled:opacity-50"
         >
-          {uploading ? "Uploading..." : "Upload song"}
+          {uploading ? t("upload.uploading") : t("upload.submit")}
         </button>
       </form>
     </div>

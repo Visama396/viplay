@@ -23,6 +23,9 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
 - Queue management (play a single song within all songs, or a whole playlist)
 - Karaoke-style synced lyrics (LRC format, line-level and word-level
   `<mm:ss.xx>` tags synced to playback)
+- In-player lyrics timing editor: keep the audio controls while editing, jump
+  back/forward, and stamp the current playback time onto the caret line
+  (`Alt+T`) without opening the edit-song modal
 - Username + password auth (no email) backed by **Supabase Auth** using a
   generated fake email (`${username}@app.local`) — the same trick used in the
   laregion project. Supabase Auth issues signed tokens, so RLS can trust
@@ -61,7 +64,8 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
     │   ├── ui/combobox.tsx     # autocomplete combobox (cmdk-powered)
     │   ├── ui/skeleton.tsx     # skeleton placeholder
     │   ├── Player.tsx        # audio element + controls
-    │   └── LyricsViewer.tsx  # synced karaoke lyrics
+    │   ├── LyricsViewer.tsx  # synced karaoke lyrics
+    │   └── LyricsEditor.tsx  # in-player LRC editing + timestamp stamping
     ├── layouts/
     └── pages/
         └── index.astro
@@ -120,3 +124,10 @@ starts `Ah` at 16s.
 Multiple timestamps on one line and `[offset:]` metadata are supported. Upcoming
 lines are dimmed and centered; the active line is enlarged and filled with color
 in time with the singer.
+
+To fix or add timestamps while listening, use **Sync lyrics** in the player
+(the song owner or admin): the editor replaces the lyrics pane but keeps the
+audio controls available. Put the caret on a line and press **Stamp line**
+(`Alt+T`) to rewrite that line's timestamp with the current playback time, or
+**Insert word tag** (`Alt+W`) to drop a `<mm:ss.xx>` at the caret for word-level
+karaoke; `Ctrl/Cmd+S` saves.

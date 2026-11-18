@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getPublicUrl } from "../lib/supabase";
 import type { ArtworkOption } from "../lib/types";
+import { useI18n } from "../lib/i18n";
 
 interface ArtworkFieldProps {
   /** Covers already uploaded by any song, deduped by path. */
@@ -39,10 +40,12 @@ export function ArtworkField({
   currentPath,
   artist = "",
   album = "",
-  label = "Artwork",
+  label,
   inputClass,
   fileClass,
 }: ArtworkFieldProps) {
+  const { t } = useI18n();
+  const fieldLabel = label?.trim() || t("artwork.label");
   const [mode, setMode] = useState<ArtworkMode>(
     selectedPath ? "existing" : "upload",
   );
@@ -104,7 +107,7 @@ export function ArtworkField({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <label className="block text-xs text-zinc-400">{label}</label>
+        <label className="block text-xs text-zinc-400">{fieldLabel}</label>
         {canReuse && (
           <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
             <button
@@ -116,7 +119,7 @@ export function ArtworkField({
                   : "text-zinc-400 hover:text-white"
               }`}
             >
-              Upload
+              {t("artwork.upload")}
             </button>
             <button
               type="button"
@@ -127,7 +130,7 @@ export function ArtworkField({
                   : "text-zinc-400 hover:text-white"
               }`}
             >
-              Use existing
+              {t("artwork.useExisting")}
             </button>
           </div>
         )}
@@ -143,7 +146,7 @@ export function ArtworkField({
           />
           {currentPath && !file && (
             <p className="mt-1 text-xs text-zinc-500">
-              Current artwork will be kept.
+              {t("artwork.currentKept")}
             </p>
           )}
         </div>
@@ -152,12 +155,12 @@ export function ArtworkField({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search this artist's covers by song or album..."
+            placeholder={t("artwork.searchPlaceholder")}
             className={`${inputClass} mb-2`}
           />
           {filtered.length === 0 ? (
             <p className="rounded-xl border border-dashed border-zinc-700 px-4 py-4 text-center text-xs text-zinc-500">
-              No covers from this artist match your search.
+              {t("artwork.noMatches")}
             </p>
           ) : (
             <div className="grid max-h-44 grid-cols-4 gap-2 overflow-y-auto rounded-xl border border-zinc-800 p-2 sm:grid-cols-5">
@@ -172,7 +175,7 @@ export function ArtworkField({
                     key={cover.path}
                     onClick={() => onSelectPath(cover.path)}
                     title={credit}
-                    aria-label={`Use cover from ${credit}`}
+                    aria-label={t("artwork.useCoverAria", { credit })}
                     aria-pressed={selected}
                     className={`relative overflow-hidden rounded-lg ring-2 transition ${
                       selected
@@ -198,7 +201,7 @@ export function ArtworkField({
           )}
           {selectedPath && (
             <p className="mt-1 text-xs text-zinc-500">
-              This cover will be reused — no new file is uploaded.
+              {t("artwork.reused")}
             </p>
           )}
         </div>

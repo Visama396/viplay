@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { getActiveLyrics, parseLrc } from "../lib/lrc";
+import { useI18n } from "../lib/i18n";
 
 interface LyricsViewerProps {
   content: string | null;
@@ -23,6 +24,7 @@ export default function LyricsViewer({
   audioRef,
   onSeek,
 }: LyricsViewerProps) {
+  const { t } = useI18n();
   const hasSecondary = Boolean(secondaryContent?.trim());
   const [mode, setMode] = useState<"primary" | "secondary">("primary");
   // Karaoke wipe on/off. Defaults on; only applies when word timings exist.
@@ -35,7 +37,7 @@ export default function LyricsViewer({
 
   const activeContent =
     mode === "secondary" && hasSecondary ? secondaryContent ?? null : content;
-  const label = secondaryLabel?.trim() || "Romanized";
+  const label = secondaryLabel?.trim() || t("lyrics.defaultSecondary");
 
   const parsed = useMemo(() => {
     if (!activeContent) return null;
@@ -183,7 +185,7 @@ export default function LyricsViewer({
   if (!activeContent) {
     return (
       <div className="flex h-full items-center justify-center text-zinc-500">
-        No lyrics available
+        {t("lyrics.none")}
       </div>
     );
   }
@@ -377,7 +379,7 @@ export default function LyricsViewer({
           {parsed.untimed.length > 0 && (
             <div className="mt-4 border-t border-zinc-800/60 pt-4">
               <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                Unsynced
+                {t("lyrics.unsynced")}
               </div>
               {parsed.untimed.map((t, idx) => (
                 <div
@@ -397,7 +399,7 @@ export default function LyricsViewer({
             onClick={() => setFollowActive(true)}
             className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-300 transition hover:bg-zinc-700 hover:text-white"
           >
-            Follow lyrics
+            {t("lyrics.follow")}
           </button>
         )}
         <span>{secondsToTime(smoothTime)}</span>
@@ -411,7 +413,7 @@ export default function LyricsViewer({
                 karaoke ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
               }`}
             >
-              Karaoke
+              {t("lyrics.karaoke")}
             </button>
             <button
               type="button"
@@ -421,12 +423,12 @@ export default function LyricsViewer({
                 !karaoke ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
               }`}
             >
-              Synced
+              {t("lyrics.synced")}
             </button>
           </div>
         ) : (
           <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
-            Synced
+            {t("lyrics.synced")}
           </span>
         )}
       </div>
@@ -450,6 +452,7 @@ function LyricsToggle({
   onChange: (m: "primary" | "secondary") => void;
   secondaryLabel: string;
 }) {
+  const { t } = useI18n();
   const btn = (active: boolean) =>
     `rounded-full px-3 py-1 text-xs font-medium transition ${
       active ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
@@ -462,7 +465,7 @@ function LyricsToggle({
         className={btn(mode === "primary")}
         aria-pressed={mode === "primary"}
       >
-        Original
+        {t("lyrics.original")}
       </button>
       <button
         type="button"

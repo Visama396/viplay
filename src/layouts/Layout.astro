@@ -9,8 +9,8 @@ interface Props {
 }
 
 const {
-    title = "ViPlay — Music player with karaoke-style lyrics",
-    description = "ViPlay is a music player to browse songs and playlists, play instantly, and sing along with karaoke-style synced lyrics.",
+    title = "ViPlay — Reproductor de música con letras estilo karaoke",
+    description = "ViPlay es un reproductor de música para explorar canciones y listas, reproducir al instante y cantar con letras sincronizadas estilo karaoke.",
     image = "/og-image.png",
     canonicalURL = Astro.site ?? "https://viplay.visamalog.com/",
 } = Astro.props;
@@ -23,7 +23,7 @@ const canonical =
 const ogImageURL = new URL(image, siteURL).toString();
 ---
 
-<html lang="en" class="dark">
+<html lang="es" class="dark">
     <head>
         <meta charset="utf-8" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
@@ -42,20 +42,21 @@ const ogImageURL = new URL(image, siteURL).toString();
         {/* Open Graph (Discord, Facebook, etc.) */}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="ViPlay" />
+        <meta property="og:locale" content="es_ES" />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
         <meta property="og:image" content={ogImageURL} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
-        <meta property="og:image:alt" content="ViPlay — browse songs and playlists with karaoke-style synced lyrics" />
+        <meta property="og:image:alt" content="ViPlay — explora canciones y listas con letras sincronizadas estilo karaoke" />
 
         {/* Twitter / X */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={title} />
         <meta name="twitter:description" content={description} />
         <meta name="twitter:image" content={ogImageURL} />
-        <meta name="twitter:image:alt" content="ViPlay — browse songs and playlists with karaoke-style synced lyrics" />
+        <meta name="twitter:image:alt" content="ViPlay — explora canciones y listas con letras sincronizadas estilo karaoke" />
     </head>
     <body class="bg-zinc-950 text-zinc-100">
         <slot />

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Home from "./Home";
 import Player from "./Player";
+import LibrarySidebar from "./LibrarySidebar";
+import { SidebarProvider } from "./ui/sidebar";
 import AuthScreen from "./AuthScreen";
 import UploadDialog from "./UploadDialog";
 import PlaylistDialog from "./PlaylistDialog";
@@ -12,6 +14,7 @@ import { deleteSong } from "../lib/upload";
 import {
   artistDisplayName,
   artistNameMap,
+  buildArtistEntries,
   clearLocalRecentPlays,
   fetchCatalog,
   fetchRecentPlays,
@@ -26,6 +29,12 @@ import { addSongToPlaylist, copyPlaylist, isPlaylistOwner } from "../lib/playlis
 import { shuffleAvoidingFirst, shuffleItems } from "../lib/shuffle";
 import type { Account } from "../lib/auth";
 import { getCurrentAccount, logout } from "../lib/auth";
+import {
+  readStoredLanguage,
+  storeLanguage,
+  type Language,
+} from "../lib/language";
+import { I18nProvider, translate, translateError } from "../lib/i18n";
 import type {
   Album,
   Artist,
@@ -62,6 +71,11 @@ export default function App() {
   const [playlistViewOpen, setPlaylistViewOpen] = useState(false);
   /** Shuffle is a per-playlist mode; it resets when a non-playlist queue starts. */
   const [shuffle, setShuffle] = useState(false);
+  /** Sidebar filters are owned here so they survive view switches. */
+  const [genre, setGenre] = useState<string | null>(null);
+  const [artistKey, setArtistKey] = useState<string | null>(null);
+  /** UI language: last local choice, replaced by the account preference. */
+  const [language, setLanguage] = useState<Language>(readStoredLanguage);
 
   const currentSong = queue[currentIndex];
 
@@ -88,9 +102,19 @@ export default function App() {
   // Restore any existing Supabase Auth session on load.
   useEffect(() => {
     getCurrentAccount()
-      .then((acc) => setAccount(acc))
+      .then((acc) => {
+        setAccount(acc);
+        if (acc) setLanguage(acc.language);
+      })
       .catch(() => setAccount(null));
   }, []);
+
+  // The chosen language is also mirrored to the html element and localStorage:
+  // guests keep it on this browser, accounts sync it through their profile.
+  useEffect(() => {
+    document.documentElement.lang = language;
+    storeLanguage(language);
+  }, [language]);
 
   // Unlock the shared AudioContext during a user gesture. Capture phase runs
   // before the song/card click handlers, so the context is running before the
@@ -142,11 +166,13 @@ export default function App() {
 
   const handleAuth = useCallback((acc: Account) => {
     setAccount(acc);
+    setLanguage(acc.language);
     setAuthOpen(false);
   }, []);
 
   const handleAccountUpdated = useCallback((acc: Account) => {
     setAccount(acc);
+    setLanguage(acc.language);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -171,15 +197,34 @@ export default function App() {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  const handleDelete = useCallback(async (songId: string) => {
-    const res = await deleteSong(songId);
-    if (res.success) setRefreshKey((k) => k + 1);
-    else if (res.error) alert(res.error);
-  }, []);
+  const handleDelete = useCallback(
+    async (songId: string) => {
+      const res = await deleteSong(songId);
+      if (res.success) setRefreshKey((k) => k + 1);
+      else if (res.error) alert(translateError(language, res.error));
+    },
+    [language],
+  );
 
   const openEdit = useCallback((song: Song) => setEditSong(song), []);
   const closeEdit = useCallback(() => setEditSong(null), []);
   const afterEdit = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  // Lyrics saved from the player's inline editor get a new storage path.
+  // Patch every list that may still hold the old Song object so playback and
+  // the next page load don't keep pointing at the deleted lyrics file.
+  const handleLyricsSaved = useCallback((songId: string, lyricsPath: string | null) => {
+    const patch = (s: Song) =>
+      s.id === songId ? { ...s, lyrics_path: lyricsPath } : s;
+    setSongs((prev) => prev.map(patch));
+    setQueue((prev) => prev.map(patch));
+    setPlaylists((prev) =>
+      prev.map((pl) => ({ ...pl, songs: pl.songs.map(patch) })),
+    );
+    setActivePlaylist((prev) =>
+      prev ? { ...prev, songs: prev.songs.map(patch) } : prev,
+    );
+  }, []);
 
   const openCreatePlaylist = useCallback(() => {
     if (!account) {
@@ -212,13 +257,18 @@ export default function App() {
       }
       const res = await copyPlaylist(pl, account);
       if (res.error || !res.id) {
-        alert(res.error ?? "Could not copy playlist");
+        alert(
+          translateError(
+            language,
+            res.error ?? translate(language, "errors.copyPlaylist"),
+          ),
+        );
         return;
       }
       setRefreshKey((k) => k + 1);
       setPlaylistDialog({ kind: "manage", id: res.id });
     },
-    [account],
+    [account, language],
   );
 
   const handleQuickAdd = useCallback(
@@ -228,10 +278,10 @@ export default function App() {
         return;
       }
       const res = await addSongToPlaylist(pl, songId, account);
-      if (res.error) alert(res.error);
+      if (res.error) alert(translateError(language, res.error));
       else setRefreshKey((k) => k + 1);
     },
-    [account],
+    [account, language],
   );
 
   useEffect(() => {
@@ -309,6 +359,22 @@ export default function App() {
 
   const goToBrowse = useCallback(() => setView("browse"), []);
   const goToPlayer = useCallback(() => setView("player"), []);
+
+  // Sidebar data/state is shared by the browse and song views.
+  const artistEntries = useMemo(
+    () => buildArtistEntries(songs, artists),
+    [songs, artists],
+  );
+
+  // Filters only make sense while browsing, so picking one leaves the player.
+  const handleGenreChange = useCallback((next: string | null) => {
+    setGenre(next);
+    setView("browse");
+  }, []);
+  const handleSelectArtist = useCallback((key: string | null) => {
+    setArtistKey(key);
+    setView("browse");
+  }, []);
 
   // A playlist is the only multi-song queue. Any individual song click plays
   // just that song. `playlist` is passed when starting from a playlist view,
@@ -424,55 +490,77 @@ export default function App() {
   })();
 
   return (
-    <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] flex-col overflow-hidden bg-zinc-950 text-zinc-100">
-      {!playerOpen && (
-        <div className="flex flex-1 overflow-hidden">
-          <Home
-            songs={songs}
-            playlists={playlists}
-            artists={artists}
-            allGenres={allGenres}
-            recentIds={recentIds}
-            loading={loading}
-            currentId={currentSong?.id ?? null}
-            onPlay={handlePlay}
-            account={account}
-            onLogin={openLogin}
-            onLogout={handleLogout}
-            onUpload={openUpload}
-            onAccount={openAccount}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-            onCreatePlaylist={openCreatePlaylist}
-            onManagePlaylist={openManagePlaylist}
-            onCopyPlaylist={handleCopyPlaylist}
-            onQuickAdd={handleQuickAdd}
-            onPlayPlaylist={handlePlayPlaylist}
-          />
-        </div>
-      )}
-      {queue.length > 0 && currentIndex >= 0 && (
-        <Player
-          queue={queue}
-          currentIndex={currentIndex}
-          onEnded={handleEnded}
-          onPrev={handlePrev}
-          onNext={handleNext}
-          onBack={goToBrowse}
-          onExpand={goToPlayer}
-          compact={!playerOpen}
+    <I18nProvider language={language}>
+      <div className="flex h-screen supports-[height:100dvh]:h-[100dvh] flex-col overflow-hidden bg-zinc-950 text-zinc-100">
+      <SidebarProvider
+        className="relative flex min-h-0 w-full flex-1"
+        style={{ "--sidebar-width": "18rem" } as CSSProperties}
+      >
+        <LibrarySidebar
+          allGenres={allGenres}
+          genre={genre}
+          onGenreChange={handleGenreChange}
+          playlists={playlists}
+          loading={loading}
           account={account}
-          onEdit={openEdit}
-          onDelete={handleDelete}
-          playlist={activePlaylist}
-          playlistOpen={playlistViewOpen}
-          onPlaylistOpenChange={setPlaylistViewOpen}
-          onPlay={handlePlay}
-          onRestart={handleRestart}
-          shuffle={shuffle}
-          onToggleShuffle={handleToggleShuffle}
+          onLogin={openLogin}
+          onLogout={handleLogout}
+          onAccount={openAccount}
+          onCreatePlaylist={openCreatePlaylist}
+          onPlayPlaylist={handlePlayPlaylist}
+          onManagePlaylist={openManagePlaylist}
+          onCopyPlaylist={handleCopyPlaylist}
+          artistEntries={artistEntries}
+          artistKey={artistKey}
+          onSelectArtist={handleSelectArtist}
         />
-      )}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {!playerOpen && (
+            <Home
+              songs={songs}
+              playlists={playlists}
+              recentIds={recentIds}
+              loading={loading}
+              currentId={currentSong?.id ?? null}
+              onPlay={handlePlay}
+              account={account}
+              onUpload={openUpload}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              onCreatePlaylist={openCreatePlaylist}
+              onQuickAdd={handleQuickAdd}
+              genre={genre}
+              onGenreChange={handleGenreChange}
+              artistEntries={artistEntries}
+              artistKey={artistKey}
+              onSelectArtist={handleSelectArtist}
+            />
+          )}
+          {queue.length > 0 && currentIndex >= 0 && (
+            <Player
+              queue={queue}
+              currentIndex={currentIndex}
+              onEnded={handleEnded}
+              onPrev={handlePrev}
+              onNext={handleNext}
+              onBack={goToBrowse}
+              onExpand={goToPlayer}
+              compact={!playerOpen}
+              account={account}
+              onEdit={openEdit}
+              onDelete={handleDelete}
+              playlist={activePlaylist}
+              playlistOpen={playlistViewOpen}
+              onPlaylistOpenChange={setPlaylistViewOpen}
+              onPlay={handlePlay}
+              onRestart={handleRestart}
+              shuffle={shuffle}
+              onToggleShuffle={handleToggleShuffle}
+              onLyricsSaved={handleLyricsSaved}
+            />
+          )}
+        </div>
+      </SidebarProvider>
       {authOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -561,6 +649,7 @@ export default function App() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </I18nProvider>
   );
 }

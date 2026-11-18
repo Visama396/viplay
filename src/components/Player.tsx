@@ -5,8 +5,12 @@ import { artistCredit } from "../lib/catalog";
 import type { Account } from "../lib/auth";
 import type { PlaylistWithSongs, Song } from "../lib/types";
 import LyricsViewer from "./LyricsViewer";
+import LyricsEditor from "./LyricsEditor";
+import { SidebarTrigger } from "./ui/sidebar";
+import { saveLyrics } from "../lib/upload";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import PlaylistViewDialog from "./PlaylistViewDialog";
+import { useI18n } from "../lib/i18n";
 
 const VOLUME_STORAGE_KEY = "viplay.volume";
 const DEFAULT_VOLUME = 0.5;
@@ -57,6 +61,8 @@ interface PlayerProps {
   shuffle: boolean;
   /** Turns playlist shuffle on or off. */
   onToggleShuffle: () => void;
+  /** Keeps the app's song lists in sync after saving lyrics from the player. */
+  onLyricsSaved: (songId: string, lyricsPath: string | null) => void;
 }
 
 export default function Player({
@@ -78,7 +84,9 @@ export default function Player({
   onRestart,
   shuffle,
   onToggleShuffle,
+  onLyricsSaved,
 }: PlayerProps) {
+  const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement>(null);
   /** Scales the vinyl. Driven imperatively at 60fps to avoid re-renders. */
   const pulseRef = useRef<HTMLDivElement>(null);
@@ -87,6 +95,8 @@ export default function Player({
   const [duration, setDuration] = useState(0);
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [secondaryLyrics, setSecondaryLyrics] = useState<string | null>(null);
+  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [editingLyrics, setEditingLyrics] = useState(false);
   const [volume, setVolume] = useState(readSavedVolume);
   const [loop, setLoop] = useState<0 | 1 | 2>(0); // 0 = off, 1 = song, 2 = playlist
 
@@ -261,8 +271,21 @@ export default function Player({
   }, [song?.lyrics_path, song?.secondary_lyrics_path]);
 
   useEffect(() => {
-    loadLyrics();
+    let cancelled = false;
+    setLyricsLoading(true);
+    loadLyrics().finally(() => {
+      if (!cancelled) setLyricsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [loadLyrics]);
+
+  // Leaving the song closes the inline lyrics editor (and discards unsaved
+  // text, since it belonged to the previous track).
+  useEffect(() => {
+    setEditingLyrics(false);
+  }, [song?.id]);
 
   const seek = (t: number) => {
     if (!audioRef.current) return;
@@ -279,8 +302,20 @@ export default function Player({
 
   const toggle = () => setPlaying((p) => !p);
 
+  // Stable live clock for the lyrics editor (rAF), independent of the coarse
+  // `currentTime` state used by the seek bar.
+  const lyricsTime = useCallback(() => {
+    const audio = audioRef.current;
+    return audio && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  }, []);
+
   const cycleLoop = () => setLoop((l) => (l === 0 ? 1 : l === 1 ? 2 : 0));
-  const loopLabel = loop === 0 ? "Loop off" : loop === 1 ? "Loop song" : "Loop playlist";
+  const loopLabel =
+    loop === 0
+      ? t("player.loopOff")
+      : loop === 1
+        ? t("player.loopSong")
+        : t("player.loopPlaylist");
 
   const handleEnded = () => {
     if (loop === 2 && currentIndex >= queue.length - 1) {
@@ -481,7 +516,7 @@ export default function Player({
             className="relative h-1 w-full cursor-pointer bg-zinc-800"
             onClick={seekFromBar}
             role="progressbar"
-            aria-label="Seek"
+            aria-label={t("player.seek")}
             aria-valuemin={0}
             aria-valuemax={Math.round(duration || 0)}
             aria-valuenow={Math.round(currentTime)}
@@ -496,11 +531,11 @@ export default function Player({
             <button
               onClick={onExpand}
               className="shrink-0"
-              aria-label="Expand player"
+              aria-label={t("player.expand")}
             >
               <img
                 src={getPublicUrl("artwork", song.artwork_path)}
-                alt={`${song.title} artwork`}
+                alt={t("common.artworkAlt", { title: song.title })}
                 className="h-12 w-12 rounded-lg object-cover"
               />
             </button>
@@ -508,7 +543,7 @@ export default function Player({
           <button
             onClick={onExpand}
             className="min-w-0 flex-1 text-left"
-            aria-label="Expand player"
+            aria-label={t("player.expand")}
           >
             <div className="truncate text-sm font-semibold text-white">
               {song.title}
@@ -521,7 +556,7 @@ export default function Player({
           <button
             onClick={onPrev}
             className="shrink-0 text-zinc-300 transition hover:text-white"
-            aria-label="Previous"
+            aria-label={t("player.previous")}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
@@ -530,14 +565,14 @@ export default function Player({
           <button
             onClick={toggle}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-500 text-white transition hover:bg-rose-400"
-            aria-label={playing ? "Pause" : "Play"}
+            aria-label={playing ? t("common.pause") : t("common.play")}
           >
             {playIcon}
           </button>
           <button
             onClick={onNext}
             className="shrink-0 text-zinc-300 transition hover:text-white"
-            aria-label="Next"
+            aria-label={t("player.next")}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" />
@@ -549,8 +584,8 @@ export default function Player({
                 <button
                   type="button"
                   className="shrink-0 text-zinc-300 transition hover:text-white"
-                  aria-label={`View playlist ${playlist.name}`}
-                  title="View playlist songs"
+                  aria-label={t("player.viewPlaylist", { name: playlist.name })}
+                  title={t("player.viewPlaylistSongs")}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h12v2H3v-2z" />
@@ -575,9 +610,9 @@ export default function Player({
               className={`shrink-0 transition ${
                 shuffle ? "text-rose-500" : "text-zinc-300 hover:text-white"
               }`}
-              aria-label={shuffle ? "Shuffle playlist on" : "Shuffle playlist"}
+              aria-label={shuffle ? t("player.shuffleOn") : t("player.shuffle")}
               aria-pressed={shuffle}
-              title={shuffle ? "Shuffle on" : "Shuffle playlist"}
+              title={shuffle ? t("player.shuffleOn") : t("player.shuffle")}
             >
               {shuffleIcon}
             </button>
@@ -601,7 +636,7 @@ export default function Player({
               value={volume}
               onChange={(e) => setVolume(Number(e.target.value))}
               className="w-20 accent-rose-500"
-              aria-label="Volume"
+              aria-label={t("player.volume")}
             />
           </div>
           </div>
@@ -609,15 +644,16 @@ export default function Player({
       ) : (
         <>
           <div className="flex shrink-0 items-center gap-3 border-b border-zinc-800 px-4 py-3 sm:px-6">
+            <SidebarTrigger className="shrink-0 text-zinc-400 hover:bg-zinc-800 hover:text-white" />
             <button
               onClick={onBack}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
-              aria-label="Back to browse"
+              className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+              aria-label={t("player.backToBrowse")}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Browse
+              {t("player.browse")}
             </button>
             {playlist && (
               <div className="min-w-0 flex-1">
@@ -629,42 +665,78 @@ export default function Player({
             )}
             {canEdit && (
               <button
+                onClick={() => setEditingLyrics(true)}
+                disabled={lyricsLoading}
+                className="ml-auto flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white disabled:opacity-50"
+                aria-label={t("player.editLyricsFor", { title: song.title })}
+                title={t("player.editLyricsTitle")}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="hidden sm:inline">{t("player.syncLyrics")}</span>
+              </button>
+            )}
+            {canEdit && (
+              <button
                 onClick={() => onEdit(song)}
-                className="ml-auto flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
-                aria-label={`Edit ${song.title}`}
-                title="Edit song"
+                className="flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+                aria-label={t("player.editSongTitle")}
+                title={t("player.editSongTitle")}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Edit
+                {t("player.edit")}
               </button>
             )}
             {isAdmin && (
               <button
                 onClick={() => onDelete(song.id)}
                 className={`flex items-center gap-1.5 rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:border-red-500 hover:bg-red-600 hover:text-white ${canEdit ? "" : "ml-auto"}`}
-                aria-label={`Delete ${song.title}`}
-                title="Delete song"
+                aria-label={t("player.deleteSongTitle")}
+                title={t("player.deleteSongTitle")}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M3 6h18M8 6V4h8v2m1 0v14a2 2 0 01-2 2H9a2 2 0 01-2-2V6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Delete
+                {t("player.delete")}
               </button>
             )}
           </div>
 
           <div className="flex min-h-0 flex-1 items-stretch justify-center gap-8 overflow-hidden px-4">
             <div className="flex min-h-0 w-full min-w-0 max-w-4xl flex-1">
-              <LyricsViewer
-                content={lyrics}
-                secondaryContent={secondaryLyrics}
-                secondaryLabel={song.secondary_lyrics_label}
-                currentTime={currentTime}
-                audioRef={audioRef}
-                onSeek={seek}
-              />
+              {editingLyrics ? (
+                <LyricsEditor
+                  key={song.id}
+                  initialContent={lyrics ?? ""}
+                  getTime={lyricsTime}
+                  playing={playing}
+                  onTogglePlay={toggle}
+                  onSeek={seek}
+                  onSave={async (text) => {
+                    const result = await saveLyrics(song.id, text);
+                    if (result.error) return { error: result.error };
+                    // Show the new text immediately; the queue update below
+                    // also points the player at the fresh storage object.
+                    setLyrics(text);
+                    onLyricsSaved(song.id, result.path ?? null);
+                    return {};
+                  }}
+                  onClose={() => setEditingLyrics(false)}
+                />
+              ) : (
+                <LyricsViewer
+                  content={lyrics}
+                  secondaryContent={secondaryLyrics}
+                  secondaryLabel={song.secondary_lyrics_label}
+                  currentTime={currentTime}
+                  audioRef={audioRef}
+                  onSeek={seek}
+                />
+              )}
             </div>
             <div className="hidden w-64 shrink-0 flex-col items-center justify-center gap-4 md:flex">
               {song.artwork_path && (
@@ -686,7 +758,7 @@ export default function Player({
                       <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.16),transparent_45%)]" />
                       <img
                         src={getPublicUrl("artwork", song.artwork_path)}
-                        alt={`${song.title} artwork`}
+                        alt={t("common.artworkAlt", { title: song.title })}
                         className="absolute left-1/2 top-1/2 aspect-square w-[58%] -translate-x-1/2 -translate-y-1/2 rounded-full object-cover ring-2 ring-black/60"
                       />
                       {/* Spindle hole at the very center. */}
@@ -712,7 +784,7 @@ export default function Player({
                 value={currentTime}
                 onChange={(e) => seek(Number(e.target.value))}
                 className="w-full accent-rose-500"
-                aria-label="Seek"
+                aria-label={t("player.seek")}
               />
               <div className="flex items-center justify-between text-xs tabular-nums text-zinc-400">
                 <span>{format(currentTime)}</span>
@@ -725,8 +797,8 @@ export default function Player({
                       <button
                         type="button"
                         className="text-zinc-300 transition hover:text-white"
-                        aria-label={`View playlist ${playlist.name}`}
-                        title="View playlist songs"
+                        aria-label={t("player.viewPlaylist", { name: playlist.name })}
+                        title={t("player.viewPlaylistSongs")}
                       >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h12v2H3v-2z" />
@@ -753,9 +825,9 @@ export default function Player({
                     className={`transition ${
                       shuffle ? "text-rose-500" : "text-zinc-300 hover:text-white"
                     }`}
-                    aria-label={shuffle ? "Shuffle playlist on" : "Shuffle playlist"}
+                    aria-label={shuffle ? t("player.shuffleOn") : t("player.shuffle")}
                     aria-pressed={shuffle}
-                    title={shuffle ? "Shuffle on" : "Shuffle playlist"}
+                    title={shuffle ? t("player.shuffleOn") : t("player.shuffle")}
                   >
                     {shuffleIcon}
                   </button>
@@ -772,7 +844,7 @@ export default function Player({
                 <button
                   onClick={onPrev}
                   className="text-zinc-300 transition hover:text-white"
-                  aria-label="Previous"
+                  aria-label={t("player.previous")}
                 >
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
@@ -781,14 +853,14 @@ export default function Player({
                 <button
                   onClick={toggle}
                   className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-500 text-white transition hover:bg-rose-400"
-                  aria-label={playing ? "Pause" : "Play"}
+                  aria-label={playing ? t("common.pause") : t("common.play")}
                 >
                   {playIcon}
                 </button>
                 <button
                   onClick={onNext}
                   className="text-zinc-300 transition hover:text-white"
-                  aria-label="Next"
+                  aria-label={t("player.next")}
                 >
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" />
@@ -806,7 +878,7 @@ export default function Player({
                     value={volume}
                     onChange={(e) => setVolume(Number(e.target.value))}
                     className="flex-1 accent-rose-500"
-                    aria-label="Volume"
+                    aria-label={t("player.volume")}
                   />
                 </div>
               </div>

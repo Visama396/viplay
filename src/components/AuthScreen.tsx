@@ -1,12 +1,14 @@
 import { useState } from "react";
 import type { Account } from "../lib/auth";
 import { login, register } from "../lib/auth";
+import { useI18n } from "../lib/i18n";
 
 interface AuthScreenProps {
   onAuth: (account: Account) => void;
 }
 
 export default function AuthScreen({ onAuth }: AuthScreenProps) {
+  const { t, errorText } = useI18n();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -25,12 +27,14 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
           : await login(username, password);
 
       if (result.error) {
-        setError(result.error);
+        setError(errorText(result.error));
       } else if (result.account) {
         onAuth(result.account);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(
+        err instanceof Error ? errorText(err.message) : t("auth.somethingWrong"),
+      );
     } finally {
       setLoading(false);
     }
@@ -44,9 +48,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
       <div className="mb-6 text-center">
         <h1 className="text-3xl font-bold text-white">ViPlay</h1>
         <p className="mt-2 text-sm text-zinc-400">
-          {mode === "login"
-            ? "Welcome back. Log in to manage playlists."
-            : "No email required. Create an account."}
+          {mode === "login" ? t("auth.welcome") : t("auth.noEmailCreate")}
         </p>
       </div>
 
@@ -64,7 +66,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 : "text-zinc-400 hover:text-white"
             }`}
           >
-            Login
+            {t("auth.login")}
           </button>
           <button
             type="button"
@@ -78,18 +80,20 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 : "text-zinc-400 hover:text-white"
             }`}
           >
-            Register
+            {t("auth.register")}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs text-zinc-400">Username</label>
+            <label className="mb-1 block text-xs text-zinc-400">
+              {t("auth.username")}
+            </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value.toLowerCase().slice(0, 16))}
-              placeholder="Enter username"
+              placeholder={t("auth.usernamePlaceholder")}
               required
               className={inputClass}
             />
@@ -97,24 +101,28 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
 
           {mode === "register" && (
             <div>
-              <label className="mb-1 block text-xs text-zinc-400">Display name</label>
+              <label className="mb-1 block text-xs text-zinc-400">
+                {t("auth.displayName")}
+              </label>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value.slice(0, 20))}
-                placeholder="How others see you"
+                placeholder={t("auth.displayNamePlaceholder")}
                 className={inputClass}
               />
             </div>
           )}
 
           <div>
-            <label className="mb-1 block text-xs text-zinc-400">Password</label>
+            <label className="mb-1 block text-xs text-zinc-400">
+              {t("auth.password")}
+            </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              placeholder={t("auth.passwordPlaceholder")}
               required
               className={inputClass}
             />
@@ -127,12 +135,16 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
             disabled={loading || !username.trim() || !password}
             className="w-full rounded-xl bg-rose-500 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-400 disabled:opacity-50"
           >
-            {loading ? "..." : mode === "login" ? "Login" : "Create account"}
+            {loading
+              ? "..."
+              : mode === "login"
+                ? t("auth.login")
+                : t("auth.createAccount")}
           </button>
         </form>
 
         <p className="text-center text-[11px] text-zinc-500">
-          No email required. Don't forget your password!
+          {t("auth.noEmailNote")}
         </p>
       </div>
     </div>

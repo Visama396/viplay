@@ -128,6 +128,76 @@ export function artistCredit(
   return featured.length > 0 ? `${song.artist} feat. ${featured.join(", ")}` : song.artist;
 }
 
+/** Stable filter key for a song's primary artist (catalog id or free text). */
+export function primaryArtistKey(
+  song: Pick<Song, "artist" | "artist_id">,
+): string {
+  return song.artist_id
+    ? `id:${song.artist_id}`
+    : `text:${song.artist.trim().toLowerCase()}`;
+}
+
+/**
+ * Every artist credited on a song (primary + featured), so filtering by any
+ * of them also shows collaborations.
+ */
+export function songArtistKeys(song: Song): string[] {
+  const keys = [primaryArtistKey(song)];
+  const featuredIds = song.featured_artist_ids ?? [];
+  if (featuredIds.length > 0) {
+    for (const id of featuredIds) keys.push(`id:${id}`);
+  } else {
+    for (const name of song.featured_artists ?? []) {
+      if (name.trim()) keys.push(`text:${name.trim().toLowerCase()}`);
+    }
+  }
+  return [...new Set(keys)];
+}
+
+export interface ArtistEntry {
+  key: string;
+  name: string;
+  count: number;
+}
+
+/**
+ * Unified artist list for the sidebar: catalog artists plus any free-text
+ * artist on songs without a catalog row yet, most-used first.
+ */
+export function buildArtistEntries(
+  songs: Song[],
+  artists: Artist[],
+): ArtistEntry[] {
+  const artistById = new Map(artists.map((a) => [a.id, a.name]));
+  const previewByKey = new Map<string, string>();
+  for (const s of songs) {
+    previewByKey.set(primaryArtistKey(s), s.artist);
+    for (const name of s.featured_artists ?? []) {
+      if (name.trim()) previewByKey.set(`text:${name.trim().toLowerCase()}`, name);
+    }
+    for (const id of s.featured_artist_ids ?? []) {
+      previewByKey.set(`id:${id}`, artistById.get(id) ?? "");
+    }
+  }
+
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const s of songs) {
+    for (const key of songArtistKeys(s)) {
+      const fallback = previewByKey.get(key) ?? s.artist;
+      const name = key.startsWith("id:")
+        ? (artistById.get(key.slice(3)) ?? fallback)
+        : fallback;
+      const entry = counts.get(key) ?? { name, count: 0 };
+      entry.count += 1;
+      entry.name = name;
+      counts.set(key, entry);
+    }
+  }
+  return [...counts.entries()]
+    .map(([key, v]) => ({ key, ...v }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
 /** Finds an existing artist (case-insensitive) or creates it. Null on failure. */
 export async function ensureArtist(name: string): Promise<string | null> {
   const clean = name.trim();

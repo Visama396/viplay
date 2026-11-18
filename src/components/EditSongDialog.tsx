@@ -3,6 +3,7 @@ import { fetchLyrics, updateSong } from "../lib/upload";
 import type { Album, Artist, ArtworkOption, Song } from "../lib/types";
 import { ArtworkField } from "./ArtworkField";
 import { MetadataFields, type MetadataValue } from "./MetadataFields";
+import { useI18n } from "../lib/i18n";
 
 interface EditSongDialogProps {
   song: Song;
@@ -20,6 +21,7 @@ interface EditSongDialogProps {
 type LyricsMode = "text" | "file";
 
 export default function EditSongDialog({ song, artists = [], albums = [], allGenres = [], songs = [], covers = [], onClose, onSaved }: EditSongDialogProps) {
+  const { t, errorText } = useI18n();
   const [title, setTitle] = useState(song.title);
   const [meta, setMeta] = useState<MetadataValue>({
     artist: song.artist,
@@ -40,7 +42,9 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
   const [secondaryMode, setSecondaryMode] = useState<LyricsMode>("text");
   const [secondaryText, setSecondaryText] = useState("");
   const [secondaryFile, setSecondaryFile] = useState<File | null>(null);
-  const [secondaryLabel, setSecondaryLabel] = useState("Romanized");
+  const [secondaryLabel, setSecondaryLabel] = useState(() =>
+    t("edit.romanizedPlaceholder"),
+  );
   const [secondaryLoaded, setSecondaryLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -66,11 +70,13 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
       setSecondaryText("");
       setSecondaryLoaded(true);
     }
-    setSecondaryLabel(song.secondary_lyrics_label?.trim() || "Romanized");
+    setSecondaryLabel(
+      song.secondary_lyrics_label?.trim() || t("edit.romanizedPlaceholder"),
+    );
     return () => {
       cancelled = true;
     };
-  }, [song.lyrics_path, song.secondary_lyrics_path, song.secondary_lyrics_label]);
+  }, [song.lyrics_path, song.secondary_lyrics_path, song.secondary_lyrics_label, t]);
 
   const canSubmit = title.trim() && meta.artist.trim() && lyricsLoaded && secondaryLoaded;
 
@@ -99,7 +105,7 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
 
     setSaving(false);
     if (result.error) {
-      setError(result.error);
+      setError(errorText(result.error));
       return;
     }
 
@@ -116,11 +122,11 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
   return (
     <div className="flex flex-col rounded-2xl bg-zinc-950 p-6 sm:p-8">
       <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">Edit song</h2>
+        <h2 className="text-xl font-bold text-white">{t("edit.title")}</h2>
         <button
           onClick={onClose}
           className="text-zinc-500 transition hover:text-white"
-          aria-label="Close"
+          aria-label={t("common.close")}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
@@ -130,7 +136,9 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-xs text-zinc-400">Title *</label>
+          <label className="mb-1 block text-xs text-zinc-400">
+            {t("upload.titleLabel")}
+          </label>
           <input
             type="text"
             value={title}
@@ -162,14 +170,16 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
           currentPath={song.artwork_path}
           artist={meta.artist}
           album={meta.album}
-          label="Artwork (replace)"
+          label={t("edit.artworkReplace")}
           inputClass={inputClass}
           fileClass={fileClass}
         />
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className="block text-xs text-zinc-400">Lyrics</label>
+            <label className="block text-xs text-zinc-400">
+              {t("edit.lyricsLabel")}
+            </label>
             <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
               <button
                 type="button"
@@ -178,7 +188,7 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
                   lyricsMode === "text" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
                 }`}
               >
-                Edit
+                {t("common.edit")}
               </button>
               <button
                 type="button"
@@ -187,7 +197,7 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
                   lyricsMode === "file" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
                 }`}
               >
-                File
+                {t("common.file")}
               </button>
             </div>
           </div>
@@ -199,12 +209,11 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
                 onChange={(e) => setLyricsText(e.target.value)}
                 spellCheck={false}
                 rows={8}
-                placeholder={"[mm:ss.xx]Line 1\n[mm:ss.xx]Line 2"}
+                placeholder={t("edit.lrcPlaceholder")}
                 className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 font-mono text-xs leading-relaxed text-zinc-100 placeholder-zinc-600 outline-none transition-colors focus:border-rose-500"
               />
               <p className="mt-1 text-xs text-zinc-500">
-                LRC format — one line per timestamp, e.g. <span className="font-mono">[00:12.50]Hello</span>.
-                Empty clears lyrics.
+                {t("edit.lrcHelp")}
               </p>
             </div>
           ) : (
@@ -216,7 +225,9 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
                 className={fileClass}
               />
               {song.lyrics_path && !lyricsFile && (
-                <p className="mt-1 text-xs text-zinc-500">Current lyrics will be kept.</p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {t("edit.currentKept")}
+                </p>
               )}
             </div>
           )}
@@ -225,8 +236,8 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
         <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="block text-xs text-zinc-400">
-              Secondary lyrics{" "}
-              <span className="text-zinc-600">(romanized / transliteration)</span>
+              {t("edit.secondary")}{" "}
+              <span className="text-zinc-600">{t("edit.secondaryHint")}</span>
             </label>
             <div className="flex rounded-lg bg-zinc-900 p-0.5 text-xs">
               <button
@@ -236,7 +247,7 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
                   secondaryMode === "text" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
                 }`}
               >
-                Edit
+                {t("common.edit")}
               </button>
               <button
                 type="button"
@@ -245,20 +256,22 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
                   secondaryMode === "file" ? "bg-rose-500 text-white" : "text-zinc-400 hover:text-white"
                 }`}
               >
-                File
+                {t("common.file")}
               </button>
             </div>
           </div>
 
           <div className="mb-2">
-            <label className="mb-1 block text-xs text-zinc-400">Button label</label>
+            <label className="mb-1 block text-xs text-zinc-400">
+              {t("edit.buttonLabel")}
+            </label>
             <input
               type="text"
               value={secondaryLabel}
               onChange={(e) => setSecondaryLabel(e.target.value)}
               className={inputClass}
               maxLength={24}
-              placeholder="Romanized"
+              placeholder={t("edit.romanizedPlaceholder")}
             />
           </div>
 
@@ -269,12 +282,11 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
                 onChange={(e) => setSecondaryText(e.target.value)}
                 spellCheck={false}
                 rows={8}
-                placeholder={"[mm:ss.xx]Romaji line 1\n[mm:ss.xx]Romaji line 2"}
+                placeholder={t("edit.secondaryPlaceholder")}
                 className="w-full resize-y rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 font-mono text-xs leading-relaxed text-zinc-100 placeholder-zinc-600 outline-none transition-colors focus:border-rose-500"
               />
               <p className="mt-1 text-xs text-zinc-500">
-                Same timestamps as the original, alternate script. Empty clears
-                secondary lyrics.
+                {t("edit.secondaryHelp")}
               </p>
             </div>
           ) : (
@@ -286,7 +298,9 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
                 className={fileClass}
               />
               {song.secondary_lyrics_path && !secondaryFile && (
-                <p className="mt-1 text-xs text-zinc-500">Current secondary lyrics will be kept.</p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {t("edit.currentSecondaryKept")}
+                </p>
               )}
             </div>
           )}
@@ -299,7 +313,7 @@ export default function EditSongDialog({ song, artists = [], albums = [], allGen
           disabled={saving || !canSubmit}
           className="w-full rounded-xl bg-rose-500 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-400 disabled:opacity-50"
         >
-          {saving ? "Saving..." : "Save changes"}
+          {saving ? t("common.saving") : t("edit.saveChanges")}
         </button>
       </form>
     </div>
