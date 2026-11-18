@@ -17,7 +17,11 @@ interface LyricLine {
 interface ParsedLyrics {
   lines: LyricLine[];
   metadata: Record<string, string>;
-  /** True when at least one line carries per-word timings. */
+  /**
+   * True when lyrics carry timing finer than line starts, so the karaoke
+   * wipe can be offered: either several words per line or a line with an
+   * explicit end tag (`[mm:ss]text<mm:ss>`, common in generated LRC files).
+   */
   hasWordTiming: boolean;
   /** Lines without timestamps (e.g. unfinished sync). Shown as static tail. */
   untimed: string[];
@@ -165,7 +169,9 @@ export function parseLrc(content: string): ParsedLyrics {
     lines[i].endTime = i + 1 < lines.length ? lines[i + 1].time : null;
   }
 
-  const hasWordTiming = lines.some((l) => l.words.length > 1);
+  const hasWordTiming = lines.some(
+    (l) => l.words.length > 1 || l.words.some((w) => w.end != null),
+  );
   return { lines, metadata, hasWordTiming, untimed };
 }
 
@@ -255,6 +261,11 @@ export function getActiveLyrics(
       const frac = Math.min(1, Math.max(0, (time - cur.time) / span));
       lineProgress = Math.min(1, (wi + frac) / line.words.length);
     }
+  } else if (line.words[0]?.end != null && line.words[0].end > line.time) {
+    // Line start + explicit end tag (no per-word tags): wipe across the
+    // real duration of the line instead of guessing from the next line.
+    const span = line.words[0].end - line.time;
+    lineProgress = Math.min(1, Math.max(0, (time - line.time) / span));
   } else if (next) {
     const span = Math.min(next.time - line.time, MAX_LINE_WIPE);
     if (span > 0) lineProgress = Math.min(1, Math.max(0, (time - line.time) / span));
