@@ -30,6 +30,7 @@ import { shuffleAvoidingFirst, shuffleItems } from "../lib/shuffle";
 import type { Account } from "../lib/auth";
 import { getCurrentAccount, logout } from "../lib/auth";
 import {
+  DEFAULT_LANGUAGE,
   readStoredLanguage,
   storeLanguage,
   type Language,
@@ -74,8 +75,11 @@ export default function App() {
   /** Sidebar filters are owned here so they survive view switches. */
   const [genre, setGenre] = useState<string | null>(null);
   const [artistKey, setArtistKey] = useState<string | null>(null);
-  /** UI language: last local choice, replaced by the account preference. */
-  const [language, setLanguage] = useState<Language>(readStoredLanguage);
+  /** UI language: Spanish by default, replaced by the browser's last choice
+   * and then by the account preference. Starting from the default on both the
+   * server and the first client render avoids hydration mismatches; the stored
+   * choice is applied in an effect below. */
+  const [language, setLanguage] = useState<Language>(DEFAULT_LANGUAGE);
 
   const currentSong = queue[currentIndex];
 
@@ -98,6 +102,13 @@ export default function App() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSong?.id]);
+
+  // Apply this browser's last language choice after mount (reading it during
+  // render would differ between SSR and hydration). A signed-in account's
+  // preference, loaded below, takes precedence.
+  useEffect(() => {
+    setLanguage(readStoredLanguage());
+  }, []);
 
   // Restore any existing Supabase Auth session on load.
   useEffect(() => {

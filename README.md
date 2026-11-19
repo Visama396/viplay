@@ -32,6 +32,9 @@ stored in Supabase Storage, with metadata kept in Postgres tables.
   `auth.uid()` and admin checks can't be spoofed.
   Login is optional — guests can browse and play; logging in lets you create
   playlists, copy them, and upload songs (in-app dialogs).
+- UI translated into Spanish (default), German, Galician, Ukrainian and
+  Japanese. Signed-in users pick their language in **Account**; the choice is
+  stored on the account and applied automatically on any other device.
 
 ## Project Structure
 
@@ -82,6 +85,12 @@ PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 PUBLIC_SUPABASE_ANON_KEY=<anon key>
 ```
 
+### 2. Database
+
+Run `supabase/migrations/0001_init.sql` in the Supabase SQL editor. It is
+idempotent and creates the tables, RLS policies, storage buckets and RPCs —
+including the `accounts.language` column and the `set_account_language` RPC
+used by the per-account language preference.
 
 ### In-app uploads
 
@@ -93,7 +102,7 @@ reuse the same storage object so no orphan files pile up. Artwork can also be
 reused from any existing song: the new row points at the same storage object,
 and replacing a cover only deletes the old file once no other song uses it.
 
-### 2. Run
+### 3. Run
 
 ```bash
 bun install

@@ -9,6 +9,9 @@ import TiltedCard from "./TiltedCard.jsx";
 import { SidebarTrigger } from "./ui/sidebar";
 import { useI18n } from "../lib/i18n";
 
+/** Placeholder cards/rows shown in each section while the library loads. */
+const SKELETON_COUNT = 5;
+
 export interface HomeProps {
   songs: Song[];
   playlists: PlaylistWithSongs[];
@@ -150,7 +153,17 @@ export default function Home({
       )}
 
       <div className="px-6 pb-6">
-        {isBrowsing && !loading && recentSongs.length > 0 && (
+        {loading && isBrowsing && (
+          <>
+            <Section title={t("home.recentlyListened")} padded>
+              <RailSkeletons />
+            </Section>
+            <Section title={t("home.mostListened")} padded>
+              <RailSkeletons />
+            </Section>
+          </>
+        )}
+        {!loading && isBrowsing && recentSongs.length > 0 && (
           <Section title={t("home.recentlyListened")} padded>
             {recentSongs.map((song) => (
               <RailCard key={song.id} song={song} onPlay={onPlay} tilt />
@@ -177,30 +190,14 @@ export default function Home({
             ))}
           </Section>
         )}
-        {isBrowsing && !loading && (
+        {isBrowsing && (
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">
             {t("home.allSongs")}
           </h2>
         )}
         <div className="flex max-h-[35rem] flex-col overflow-y-auto pr-1">
           {loading
-            ? Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2"
-                  aria-label={t("home.loadingSong")}
-                >
-                  <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
-                  <div className="min-w-0 flex-1">
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="mt-1.5 h-3 w-1/2" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-6 w-16 rounded-full" />
-                    <Skeleton className="h-6 w-8 rounded-full" />
-                  </div>
-                </div>
-              ))
+            ? <SongRowSkeletons />
             : filtered.map((song) => {
             const isCurrent = song.id === currentId;
             const isAdmin = account?.username === "visama396";
@@ -354,6 +351,51 @@ export default function Home({
   );
 }
 
+
+/** Five placeholder cards for the recently/most listened rails. */
+function RailSkeletons({ count = SKELETON_COUNT }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          aria-hidden="true"
+          className="w-36 shrink-0 rounded-xl bg-zinc-900 p-3 sm:w-44"
+        >
+          <Skeleton className="aspect-square w-full rounded-lg" />
+          <Skeleton className="mt-2 h-4 w-3/4" />
+          <Skeleton className="mt-1.5 h-3 w-1/2" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Five placeholder rows for the all-songs list. */
+function SongRowSkeletons({ count = SKELETON_COUNT }: { count?: number }) {
+  const { t } = useI18n();
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-3 rounded-lg px-2 py-2"
+          aria-label={t("home.loadingSong")}
+        >
+          <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="mt-1.5 h-3 w-1/2" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-6 w-16 rounded-full" />
+            <Skeleton className="h-6 w-8 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
 
 function HorizontalRail({
   children,
